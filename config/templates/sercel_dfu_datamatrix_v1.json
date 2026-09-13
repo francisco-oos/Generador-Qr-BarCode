@@ -1,6 +1,6 @@
 {
   "id": "sercel_dfu_datamatrix_v1",
-  "name": "Sercel DFU — Data Matrix + ID visual",
+  "name": "Sercel DFU — Data Matrix + ID visual Centro",
   "version": "1.0",
   "category": "node_sercel",
   "description": "Alternativa 2D compacta para lectores 2D; no sustituye la plantilla 1D mientras se use un LS2208.",
@@ -11,23 +11,36 @@
   "expected_fields": [
     "manufacturer_id"
   ],
+  "input_rules": [],
   "elements": [
     {
       "kind": "datamatrix",
-      "x_mm": 0.5,
-      "y_mm": 0.5,
-      "source": "manufacturer_id|serial|asset_id",
+      "x_mm": 13.749999999999998,
+      "y_mm": 0.0,
+      "source": "manufacturer_id",
+      "literal": null,
+      "width_mm": null,
+      "height_mm": null,
+      "font_size_mm": 4.0,
+      "align": "center",
       "module_mm": 0.4,
+      "error_correction": "M",
+      "stroke_mm": 0.25,
       "label": "Data Matrix"
     },
     {
       "kind": "text",
-      "x_mm": 20.0,
-      "y_mm": 12.0,
-      "source": "manufacturer_id|serial|asset_id",
+      "x_mm": 9.0,
+      "y_mm": 21.0,
+      "source": "manufacturer_id",
+      "literal": null,
       "width_mm": 21.0,
-      "font_size_mm": 4.0,
-      "align": "center",
+      "height_mm": null,
+      "font_size_mm": 3.2,
+      "align": "right",
+      "module_mm": null,
+      "error_correction": "M",
+      "stroke_mm": 0.25,
       "label": "ID visual"
     }
   ],
@@ -52,6 +65,5 @@
         "número"
       ]
     }
-  },
-  "input_rules": []
+  }
 }
