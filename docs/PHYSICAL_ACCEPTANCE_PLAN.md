@@ -97,3 +97,18 @@ Fase 3: comparar métricas:
 - daño superficial o ilegibilidad.
 
 Sólo después aprobar la plantilla como estándar productivo.
+
+
+## Cupón de caracterización v0.8.0
+
+Para una superficie nueva, use una pieza de descarte y el mismo dato en cuatro estrategias: A positivo, B negative/codes/islands, C negative/all/islands y D negative/all/template. Mantenga documentado el preset de máquina; no mezcle cambios de potencia con cambios de polaridad en la misma comparación si quiere atribuir correctamente el resultado.
+
+Por cada panel registre: modo, material/superficie, máquina, preset, kerf (si fue medido), acabado aplicado, lector, intentos, lecturas correctas y observaciones. Sólo promueva una combinación a «validada» cuando el dato leído coincida exactamente y sea repetible.
+
+Para negativo, mida kerf sobre pieza real antes de introducir compensación. `0` significa sin compensación y es el único default aceptable.
+
+## v0.8.0 — aceptación del modo invertido y elemento imagen
+
+Para negativo utilice el cupón de cuatro combinaciones invertidas y la comparación positiva separada. `codes+template` está rotulado **2PASS** y debe probarse asignando operaciones separadas en el software de máquina; Marking Studio no las ejecuta.
+
+Para `image`, prepare al menos un logo SVG sencillo, un logo PNG de dos tonos y un raster con Floyd–Steinberg. Verifique definición de bordes, sobrecalentamiento y repetibilidad. No existe criterio de “decodificación” para imagen; la aceptación es visual/física y debe registrarse como tal.

@@ -7,11 +7,11 @@ rendering core can scale to new equipment without hardcoded branches.
 from __future__ import annotations
 
 from typing import Any, Literal
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 
 
 ElementKind = Literal[
-    "text", "code128", "code39", "qr", "datamatrix", "rect", "line"
+    "text", "code128", "code39", "qr", "datamatrix", "rect", "line", "image"
 ]
 
 
@@ -30,8 +30,25 @@ class InputRule(BaseModel):
     manual_suffix: str = Field(default="", max_length=64)
     imported_values: Literal["as_is", "ensure_prefix_suffix"] = "as_is"
     uppercase: bool = False
+    # WHY: Alternativa a ``uppercase`` para flujos cuyo identificador oficial va en
+    # minusculas.  Si ambos quedaran activos gana ``uppercase``, y el validador lo
+    # impide en lugar de dejar una plantilla con comportamiento ambiguo.
+    lowercase: bool = False
     trim: bool = True
+    # WHY: Rellena con ceros a la izquierda hasta un ancho fijo.  Existe porque una
+    # exportacion de Excel pierde los ceros iniciales de ``00184`` al tratarlo como
+    # numero, y reponerlos a mano es justo el tipo de error que llega al grabado.
+    # ``0`` desactiva la regla; nunca recorta un valor mas largo que el ancho.
+    pad_zeros_to: int = Field(default=0, ge=0, le=64)
     description: str = ""
+
+    # WHY: Dos conversiones de caja opuestas en la misma regla no tienen un
+    # resultado previsible para el usuario; se rechaza al guardar la plantilla.
+    @model_validator(mode="after")
+    def case_rules_not_contradictory(self) -> "InputRule":
+        if self.uppercase and self.lowercase:
+            raise ValueError("uppercase and lowercase cannot both be enabled for the same field")
+        return self
 
     # WHY: Normaliza y valida el nombre del campo para impedir reglas ambiguas o claves peligrosas.
     @field_validator("field")
@@ -42,6 +59,75 @@ class InputRule(BaseModel):
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
             raise ValueError("input rule field must be a simple identifier")
         return value
+
+
+# WHY: Campo compuesto a partir de otros campos ya normalizados.
+class DerivedField(BaseModel):
+    """Concatenate existing fields into a new one, declaratively.
+
+    Existe para cubrir el caso real ``{prefijo}{serial}`` o
+    ``{modelo}-{economico}`` sin obligar a preparar el CSV fuera del programa.
+
+    Deliberadamente NO es un lenguaje de expresiones: solo sustitucion de
+    marcadores y texto literal.  Una calculadora completa dentro de la plantilla
+    seria imposible de auditar y convertiria un archivo de configuracion en
+    codigo ejecutable.  Si un caso necesita mas que concatenar, corresponde
+    resolverlo en el origen de datos.
+    """
+    field: str
+    expression: str = Field(min_length=1, max_length=400)
+    # WHY: Por defecto no pisa un valor que ya venia en el CSV; el archivo del area
+    # es la fuente autoritativa salvo que el usuario decida lo contrario.
+    overwrite: bool = False
+    description: str = ""
+
+    # WHY: Mismo formato de identificador que el resto de campos del sistema.
+    @field_validator("field")
+    @classmethod
+    def derived_field_safe(cls, value: str) -> str:
+        import re
+        value = value.strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
+            raise ValueError("derived field must be a simple identifier")
+        return value
+
+
+
+
+# WHY: El modo de marcado describe la estrategia física del trabajo sin
+# contaminar la definición matemática del QR/barcode. Vive en la plantilla como
+# valor validado y puede sobreescribirse temporalmente por trabajo.
+class MarkingMode(BaseModel):
+    polarity: Literal["positive", "negative"] = "positive"
+    polarity_scope: Literal["codes", "all"] = "codes"
+    negative_field: Literal["islands", "template"] = "islands"
+    field_margin_mm: float = Field(default=0.0, ge=0.0, le=100.0)
+    # Semántica acordada: compensación TOTAL deseada del ancho del módulo; la
+    # geometría protege la mitad por cada lado. 0 significa no compensar.
+    kerf_compensation_mm: float = Field(default=0.0, ge=0.0, le=10.0)
+    validated_on: str = Field(default="", max_length=1000, validation_alias=AliasChoices("validated_on", "validado_sobre"))
+
+    # WHY: Centraliza compatibilidad del contrato para impedir combinaciones silenciosamente ambiguas al crecer el modelo.
+    @model_validator(mode="after")
+    def validate_combination(self) -> "MarkingMode":
+        # codes+template exige una segunda operación física para que texto positivo
+        # coexista con un campo completo rebajado. Se representa para investigación,
+        # pero el renderer productivo la rechaza hasta validación física.
+        if self.polarity == "positive":
+            return self
+        return self
+
+    # WHY: Evita repetir comparaciones de cadenas en render/preflight y conserva una única semántica de polaridad.
+    @property
+    def is_negative(self) -> bool:
+        return self.polarity == "negative"
+
+    def physical_fingerprint(self) -> tuple:
+        """Campos que cambian físicamente la pieza; validated_on es sólo evidencia."""
+        return (
+            self.polarity, self.polarity_scope, self.negative_field,
+            round(self.field_margin_mm, 6), round(self.kerf_compensation_mm, 6),
+        )
 
 
 # WHY: Describe un objeto visual de plantilla con geometría, fuente de datos y propiedades específicas de cada simbología.
@@ -59,6 +145,64 @@ class ElementSpec(BaseModel):
     error_correction: Literal["L", "M", "Q", "H"] = "M"
     stroke_mm: float = Field(default=0.25, gt=0)
     label: str | None = None
+    # WHY: Rotacion en grados, sentido horario, alrededor del centro geometrico del
+    # propio elemento. Se guarda en el modelo (no como un transform escrito a mano)
+    # para que el editor, la vista real y ambos SVG produzcan exactamente el mismo
+    # resultado y para que el valor pueda medirse y devolverse desde Inkscape.
+    rotation_deg: float = Field(default=0.0, ge=-360.0, le=360.0)
+    # WHY: Quiet zone propia del elemento, en modulos. ``None`` hereda el perfil de
+    # calidad, que es el comportamiento seguro por defecto. Se permite bajarla porque
+    # hay piezas donde fisicamente no cabe el margen recomendado, pero el motor emite
+    # una advertencia explicita: el riesgo se informa, no se oculta ni se bloquea.
+    quiet_modules: int | None = Field(default=None, ge=0, le=64)
+    # WHY (v0.7.1): Estrategia de grabado por elemento de codigo. ``positive``
+    # conserva el comportamiento historico: el laser marca barras/modulos oscuros.
+    # ``negative_background`` graba el fondo/espacios y deja barras/modulos en
+    # relieve. Esta segunda opcion sirve para superficies de poco contraste donde
+    # el taller quiera frotar marcador/pintura sobre el relieve despues del laser.
+    # No se llama "inverse barcode" porque la polaridad optica final depende del
+    # acabado fisico y del lector, no solamente del SVG.
+    # DEPRECATED compatibility v0.7.1: el modo productivo ahora vive en TemplateSpec.marking_mode.
+    engraving_mode: Literal["positive", "negative_background"] = "positive"
+    # WHY (v0.8.0 final): Las imágenes se embeben en la plantilla para que un logo no
+    # dependa de una ruta local que podría cambiar entre Windows/Linux/macOS. El backend
+    # limita tamaño y sanea SVG antes de serializarlo; no se permiten URLs externas.
+    image_data_uri: str | None = Field(default=None, max_length=4_500_000)
+    image_processing: Literal["auto", "vector", "threshold", "floyd_steinberg"] = "auto"
+    image_threshold: int = Field(default=128, ge=0, le=255)
+    # DPI de muestreo del arte raster -> geometría 1-bit. No es potencia/velocidad ni
+    # pretende ser una receta física de la máquina.
+    image_dpi: int = Field(default=254, ge=50, le=1200)
+    image_preserve_aspect: bool = True
+    image_source_name: str = Field(default="", max_length=255)
+
+    # WHY: Normaliza la rotacion al rango 0-360 para que -90 y 270 produzcan el mismo
+    # archivo y las comparaciones de plantillas no dependan de como se escribio el valor.
+    @field_validator("rotation_deg")
+    @classmethod
+    def rotation_normalized(cls, value: float) -> float:
+        return round(float(value) % 360.0, 4)
+    # WHY: Nombre estable elegido por el usuario. Se convierte en el ``id`` del SVG
+    # (``barcode_serial``), que es lo que permite medir un objeto en Inkscape y
+    # devolver esa medida a la plantilla sin adivinar de que elemento se trata.
+    name: str | None = Field(default=None, max_length=80)
+    # WHY: Capa semantica de destino. Si no se indica, se deduce del tipo de elemento;
+    # declararla permite, por ejemplo, mandar un rectangulo a la capa de registro.
+    layer: str | None = Field(default=None, max_length=40)
+
+    # WHY: Restringe el nombre a un identificador apto para XML, ficheros y referencias externas.
+    @field_validator("name")
+    @classmethod
+    def name_safe(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        import re
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", cleaned):
+            raise ValueError("element name must start with a letter/underscore and use letters, numbers, _ or -")
+        return cleaned
 
     # WHY: Exige que un elemento de contenido tenga una fuente o literal coherente, evitando SVG vacíos difíciles de detectar.
     @model_validator(mode="after")
@@ -66,6 +210,29 @@ class ElementSpec(BaseModel):
         if self.kind in {"text", "code128", "code39", "qr", "datamatrix"}:
             if not self.source and self.literal is None:
                 raise ValueError(f"{self.kind} requires source or literal")
+        if self.kind == "image":
+            if not self.image_data_uri:
+                raise ValueError("image requires image_data_uri")
+            if self.width_mm is None or self.height_mm is None:
+                raise ValueError("image requires width_mm and height_mm")
+            # Sólo se aceptan data URIs embebidas de los tres formatos que el backend
+            # sabe sanear/convertir. Rechazar aquí da feedback al guardar la plantilla,
+            # no varios pasos después durante un render de producción.
+            uri = self.image_data_uri.lower().strip()
+            supported = (
+                uri.startswith("data:image/png;base64,"),
+                uri.startswith("data:image/jpeg;base64,"),
+                uri.startswith("data:image/svg+xml;base64,"),
+            )
+            if not any(supported):
+                raise ValueError("image_data_uri must be an embedded PNG, JPEG or SVG data URI")
+            is_svg = supported[2]
+            if is_svg and self.image_processing not in {"auto", "vector"}:
+                raise ValueError("SVG image elements support auto/vector processing only")
+            if not is_svg and self.image_processing == "vector":
+                raise ValueError("PNG/JPEG image elements cannot use vector processing; choose auto, threshold or floyd_steinberg")
+        if self.engraving_mode != "positive" and self.kind not in {"code128", "code39", "qr", "datamatrix"}:
+            raise ValueError("negative_background is only valid for barcode/2D code elements")
         return self
 
 
@@ -82,6 +249,10 @@ class TemplateSpec(BaseModel):
     calibration_required: bool = True
     expected_fields: list[str] = Field(default_factory=list)
     input_rules: list[InputRule] = Field(default_factory=list)
+    # WHY: Se aplican DESPUES de input_rules para que un campo compuesto use los
+    # valores ya normalizados y no el texto crudo del archivo.
+    derived_fields: list[DerivedField] = Field(default_factory=list)
+    marking_mode: MarkingMode = Field(default_factory=MarkingMode)
     elements: list[ElementSpec]
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -179,6 +350,26 @@ class RenderRequest(BaseModel):
     capture_mode: Literal["manual", "import"] = "manual"
     output: Literal["svg", "png"] = "svg"
     dpi: int | None = Field(default=None, ge=150, le=2400)
+    # WHY: El usuario elige el artefacto; el sistema no impone generar ambos.
+    #
+    # WHY (alias): los endpoints de artefacto unico llaman a este concepto ``svg_mode``,
+    # mientras que los de lote lo llaman ``export_mode`` porque ademas admiten ``both``.
+    # Un cliente que usara el nombre del otro endpoint recibiria en silencio el modo por
+    # defecto: Pydantic ignora los campos desconocidos y el error solo se descubriria al
+    # abrir el archivo. Aceptar ambos nombres elimina esa clase de fallo silencioso.
+    svg_mode: Literal["editable", "production"] = Field(
+        default="production", validation_alias=AliasChoices("svg_mode", "export_mode")
+    )
+    # WHY: Solo aplica a produccion. Se declara aparte del modo para que activar
+    # curvas sea una decision consciente y visible, no un efecto secundario.
+    text_as_paths: bool = False
+    # WHY: Permite probar otra estrategia sin contaminar la plantilla validada.
+    marking_mode_override: MarkingMode | None = None
+
+
+# WHY: Seleccion de artefactos de un trabajo. "both" existe para calibracion y
+# depuracion, pero no es el valor por defecto para no duplicar miles de archivos.
+ExportMode = Literal["editable", "production", "both"]
 
 
 # WHY: Vincula una fila de datos con una posición física y, opcionalmente, con la identidad observada por el operador.
@@ -197,6 +388,9 @@ class BatchExportRequest(BaseModel):
     assignments: list[BatchAssignment]
     require_physical_confirmation: bool = True
     output_dpi: int | None = Field(default=None, ge=150, le=2400)
+    export_mode: ExportMode = "production"
+    text_as_paths: bool = False
+    marking_mode_override: MarkingMode | None = None
 
 
 # WHY: Entrada controlada para crear numeraciones conocidas sin inferir seriales perdidos.
@@ -239,6 +433,12 @@ class TemplatePreviewRequest(BaseModel):
     capture_mode: Literal["manual", "import"] = "manual"
     output: Literal["svg", "png"] = "svg"
     dpi: int | None = Field(default=None, ge=150, le=2400)
+    # WHY (alias): mismo motivo que en RenderRequest; ver la nota alli.
+    svg_mode: Literal["editable", "production"] = Field(
+        default="production", validation_alias=AliasChoices("svg_mode", "export_mode")
+    )
+    text_as_paths: bool = False
+    marking_mode_override: MarkingMode | None = None
 
 
 # WHY: Solicita un SVG por registro para escenarios sin jig o composición posterior en el software de la máquina.
@@ -252,6 +452,28 @@ class CodeQualityCheckRequest(BaseModel):
     scanner_profile_id: str | None = None
     dpi: int | None = Field(default=None, ge=150, le=2400)
     digital_stress: bool = True
+    marking_mode_override: MarkingMode | None = None
+
+# WHY: Contrato dedicado para comparar lectura positiva vs. artefacto de ablación negativo sin tocar la plantilla guardada.
+class MarkingComparisonRequest(BaseModel):
+    template: TemplateSpec
+    data: dict[str, str] = Field(default_factory=dict)
+    capture_mode: Literal["manual", "import"] = "manual"
+    negative_mode: MarkingMode = Field(default_factory=lambda: MarkingMode(polarity="negative"))
+    dpi: int = Field(default=600, ge=150, le=2400)
+    # WHY: PNG is optional because SVG is the canonical preview and large base64
+    # payloads are unnecessary during normal interaction.  When requested, both
+    # PNGs are rasterized from the exact SVGs returned by this endpoint.
+    include_png: bool = False
+
+
+# WHY: Solicita un cupón físico de cuatro paneles para caracterizar polaridad sin inventar ajustes de máquina.
+class MarkingCouponRequest(BaseModel):
+    template: TemplateSpec
+    data: dict[str, str] = Field(default_factory=dict)
+    capture_mode: Literal["manual", "import"] = "manual"
+    negative_mode: MarkingMode = Field(default_factory=lambda: MarkingMode(polarity="negative"))
+
 
 class BulkTemplateExportRequest(BaseModel):
     """Export one SVG per row using a saved template.
@@ -262,6 +484,12 @@ class BulkTemplateExportRequest(BaseModel):
     template_id: str
     rows: list[dict[str, str]] = Field(min_length=1, max_length=10000)
     filename_field: str | None = Field(default=None, max_length=64)
+    # WHY: Patron libre tipo ``{economico}_{serial}``; se sanea despues contra las
+    # restricciones de nombre de Windows, Linux y macOS.
+    filename_pattern: str | None = Field(default=None, max_length=200)
+    export_mode: ExportMode = "production"
+    text_as_paths: bool = False
+    marking_mode_override: MarkingMode | None = None
 
 
 # WHY: Envuelve un jig antes de persistirlo y reutiliza la validación del modelo.
@@ -344,4 +572,20 @@ class ShopMaterialPresetRequest(BaseModel):
     laser_mode: Literal["M3", "M4", "unknown"] = "unknown"
     validated_on_exact_machine_surface: bool = False
     notes: str = Field(default="", max_length=2000)
+    marking_mode: MarkingMode | None = None
+    scanner_profile_id: str | None = Field(default=None, max_length=160)
+    scan_validation: Literal["not_tested", "pass", "fail", "partial"] = "not_tested"
+    scan_attempts: int | None = Field(default=None, ge=0, le=1000)
+    scan_successes: int | None = Field(default=None, ge=0, le=1000)
+
+    # WHY: Una evidencia de lectura imposible (más éxitos que intentos o resultado sin intentos) degradaría la biblioteca validada.
+    @model_validator(mode="after")
+    def validate_scan_evidence(self) -> "ShopMaterialPresetRequest":
+        if self.scan_attempts is not None and self.scan_successes is not None and self.scan_successes > self.scan_attempts:
+            raise ValueError("scan_successes cannot exceed scan_attempts")
+        if self.scan_validation != "not_tested" and (self.scan_attempts is None or self.scan_successes is None):
+            raise ValueError("scan_attempts and scan_successes are required when scan_validation is recorded")
+        if self.scan_validation == "pass" and self.scan_attempts is not None and self.scan_successes != self.scan_attempts:
+            raise ValueError("scan_validation=pass requires all recorded attempts to succeed")
+        return self
 

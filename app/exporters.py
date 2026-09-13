@@ -43,24 +43,43 @@ def manifest_csv_bytes(manifest: list[dict]) -> bytes:
 
 
 # WHY: Empaqueta producción, preview separado y manifiestos para que una entrega de lote sea autocontenida y auditable.
-def build_batch_zip(svg: str, preview_svg: str, png: bytes, manifest: list[dict], metadata: dict, raster_dpi: int = 300) -> bytes:
+def build_batch_zip(svg: str, preview_svg: str, png: bytes, manifest: list[dict], metadata: dict,
+                    raster_dpi: int = 300, editable_svg: str | None = None,
+                    negative: bool = False) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
-        z.writestr("engraving/batch.svg", svg.encode("utf-8"))
+        mm = metadata.get("marking_mode") or {}
+        two_stage = bool(negative and mm.get("polarity_scope") == "codes" and mm.get("negative_field") == "template")
+        neg_tag = "NEGATIVE_2PASS" if two_stage else "NEGATIVE"
+        prod_name = f"batch_{neg_tag}.svg" if negative else "batch.svg"
+        png_name = f"batch_{neg_tag}_{raster_dpi}dpi.png" if negative else f"batch_{raster_dpi}dpi.png"
+        z.writestr(f"engraving/{prod_name}", svg.encode("utf-8"))
+        # WHY: El maestro editable viaja en su propia carpeta para que nadie lo
+        # confunda con el archivo que va a la maquina.
+        if editable_svg:
+            z.writestr("editable/batch_master_editable.svg", editable_svg.encode("utf-8"))
         z.writestr("preview/preview_DO_NOT_ENGRAVE.svg", preview_svg.encode("utf-8"))
-        z.writestr(f"engraving/batch_{raster_dpi}dpi.png", png)
+        z.writestr(f"engraving/{png_name}", png)
         z.writestr("manifest/manifest.csv", manifest_csv_bytes(manifest))
         z.writestr("manifest/manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False).encode("utf-8"))
         z.writestr("manifest/job.json", json.dumps(metadata, indent=2, ensure_ascii=False).encode("utf-8"))
+        negative_notice = (
+            "ATENCION: ESTE TRABAJO ES NEGATIVO/INVERTIDO. El artefacto describe ABLACION del fondo; "
+            "no es el símbolo óptico que se escanea. No lo confunda con un trabajo directo.\n"
+            + ("MODO 2 ETAPAS: fondo/códigos y contenido positivo requieren operaciones separadas en el software de la máquina.\n" if two_stage else "")
+            if negative else ""
+        )
         z.writestr(
             "README_FIRST.txt",
             (
                 "SERVER OFICINA MARKING STUDIO\n"
-                "1) batch.svg: recomendado para LightBurn o Sculpfun Space (vector).\n"
-                f"2) batch_{raster_dpi}dpi.png: alternativa raster para LaserGRBL u otros flujos compatibles.\n"
-                "3) preview/preview_DO_NOT_ENGRAVE.svg contiene la geometría de la base SOLO para revisión.\n"
-                "4) batch.svg y el PNG de engraving/ contienen únicamente las marcas.\n"
-                "5) Antes de grabar sobre equipo real, ejecute una prueba física en material de descarte y valide con el lector real.\n"
+                + negative_notice
+                + f"1) {prod_name}: artefacto vectorial de producción para handoff al software de máquina.\n"
+                + f"2) {png_name}: alternativa raster de la MISMA geometría de producción.\n"
+                + "3) preview/preview_DO_NOT_ENGRAVE.svg contiene la geometría de la base SOLO para revisión.\n"
+                + f"4) engraving/{prod_name} y el PNG de engraving/ contienen únicamente las marcas.\n"
+                + "5) Marking Studio NO controla el láser: confirme Frame/origen, material y preset en LightBurn/Sculpfun Space/LaserGRBL.\n"
+                + "6) Antes de grabar sobre equipo real, use material de descarte y valide con el lector real.\n"
             ).encode("utf-8"),
         )
     return buf.getvalue()
@@ -78,19 +97,35 @@ def build_bulk_template_zip(items: list[dict], metadata: dict) -> bytes:
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
         for index, item in enumerate(items, start=1):
             filename = str(item["filename"])
-            z.writestr(f"svg/{filename}.svg", str(item["svg"]).encode("utf-8"))
+            # WHY: Cada modalidad va en su propia carpeta. Si el trabajo pidio solo
+            # produccion, la carpeta editable/ simplemente no existe: no se generan
+            # ni se guardan miles de archivos que nadie solicito.
+            if item.get("svg"):
+                z.writestr(f"svg/{filename}.svg", str(item["svg"]).encode("utf-8"))
+            if item.get("editable_svg"):
+                z.writestr(f"editable/{filename}.svg", str(item["editable_svg"]).encode("utf-8"))
             manifest.append({"index": index, "filename": filename, **{str(k): str(v) for k, v in item.get("data", {}).items()}})
         z.writestr("manifest/manifest.csv", manifest_csv_bytes(manifest))
         z.writestr("manifest/manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False).encode("utf-8"))
         z.writestr("manifest/job.json", json.dumps(metadata, indent=2, ensure_ascii=False).encode("utf-8"))
+        mm = metadata.get("marking_mode") or {}
+        is_negative = mm.get("polarity") == "negative"
+        two_stage = bool(is_negative and mm.get("polarity_scope") == "codes" and mm.get("negative_field") == "template")
+        negative_notice = (
+            "ATENCION: LOS ARCHIVOS *_NEGATIVE.svg y *_NEGATIVE_2PASS.svg SON ARTEFACTOS DE ABLACION INVERTIDA. "
+            "No deben confundirse con marcado directo.\n"
+            + ("MODO 2 ETAPAS: asigne por separado fondo/códigos y contenido positivo en el software de la máquina.\n" if two_stage else "")
+            if is_negative else ""
+        )
         z.writestr(
             "README_FIRST.txt",
             (
                 "SERVER OFICINA MARKING STUDIO — EXPORTACION MASIVA\n"
-                "Cada archivo de svg/ es una marca individual generada desde la misma plantilla.\n"
-                "Importe los SVG en LightBurn, Sculpfun Space u otro software de máquina compatible.\n"
-                "Este paquete NO contiene G-code ni controla el láser.\n"
-                "Verifique Frame/origen, material, preset y lectura del código antes de producción.\n"
+                + negative_notice
+                + "Cada archivo de svg/ es una marca individual generada desde la misma plantilla.\n"
+                + "Importe los SVG en LightBurn, Sculpfun Space u otro software de máquina compatible.\n"
+                + "Este paquete NO contiene G-code ni controla el láser.\n"
+                + "Verifique Frame/origen, material, preset y lectura del código antes de producción.\n"
             ).encode("utf-8"),
         )
     return buf.getvalue()

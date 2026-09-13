@@ -1,4 +1,4 @@
-# Guía de revisión del código — Marking Studio v0.6.2
+# Guía de revisión del código — Marking Studio v0.8.0
 
 Esta guía se genera contra la versión entregada para que líneas y símbolos coincidan con el código real. Los comentarios `WHY:` viven junto a la implementación y explican **por qué existe** cada responsabilidad, no sólo qué hace. Si cambia el propósito de una función, actualice primero el comentario cercano y vuelva a revisar esta guía.
 
@@ -347,3 +347,50 @@ La interfaz no transmite movimiento, potencia ni encendido al láser. Este inven
 - El probe GRBL directo permanece read-only (`$I`, `$$`).
 - Un CSV puede ser una lista de una columna o tener muchas columnas; el usuario decide el mapeo.
 - No reescalar el SVG durante impresión/handoff: conservar tamaño físico 100 %.
+
+
+## Adición v0.7.1 — grabado negativo
+
+- `models.ElementSpec.engraving_mode`: decisión declarativa por código, no por fabricante.
+- `barcode_engine.negative_background_fragment`: convierte la geometría canónica en complemento vectorial usando `fill-rule=evenodd`; no recalcula el código.
+- `template_engine.build_mark_nodes`: aplica la estrategia después de alinear el símbolo y antes de serializar el nodo.
+- `code_quality.assess_template_codes`: conserva el test geométrico y marca `physical_validation_required` porque el contraste final depende del proceso físico.
+
+Invariante: agregar una nueva estrategia de acabado no debe introducir comandos de máquina ni cambiar el contenido codificado.
+
+
+## Adición v0.8.0 — capa física de marcado
+
+### `app/physical_marking.py`
+
+**WHY:** centraliza la semántica física que no pertenece al encoder: validación de combinaciones, campo negativo, huecos y área. Evita contaminar Code128/QR con reglas de acabado o fabricantes.
+
+### `app/code_geometry.py` — `union_axis_aligned_rects` / `expand_and_union_rects`
+
+**WHY:** una compensación de kerf puede solapar módulos protegidos. Con `evenodd`, dos huecos superpuestos se cancelarían; se unen antes de serializar sin añadir una librería booleana general.
+
+### `app/marking_coupon.py`
+
+**WHY:** genera una pieza de caracterización repetible con el mismo dato y cuatro estrategias físicas. No es un preset ni una simulación de potencia.
+
+### `template_engine.py`
+
+La ruta sigue siendo: resolver datos → generar/alinear positivo → aplicar capa física → serializar. `GENERATOR_VERSION=0.8.0`. `all+template` fusiona geometría intencionalmente; no pretender conservar IDs individuales dentro del path fusionado.
+
+### `code_quality.py`
+
+**Invariante:** preflight positivo. Si una revisión intenta decodificar el SVG negativo para calificar robustez, está rompiendo el modelo conceptual.
+
+### APIs nuevas/relevantes
+
+- `/api/marking/compare`: positivo/negativo desde el mismo renderer, con PNG opcional;
+- `/api/marking/coupon`: cupón A/B/C/D;
+- render/batch/bulk/preflight aceptan `marking_mode_override`;
+- presets materiales guardan evidencia física/lector.
+
+## Adición v0.8.0 final — imágenes y dos etapas
+
+- `app/image_element.py`: frontera única para contenido gráfico subido. `decode_data_uri` limita formato/tamaño; `prepare_svg_image` sanea SVG; `prepare_raster_image` binariza PNG/JPEG; `prepare_image_element` decide la ruta sin red ni recursos externos.
+- `ElementSpec(kind="image")`: transporta contenido embebido, geometría y parámetros de procesamiento. La validación del modelo rechaza MIME/procesamiento incompatibles antes de producción.
+- `template_engine.build_mark_nodes`: mantiene las imágenes fuera del preflight de códigos, calcula solapamiento con cajas de código y rechaza `negative/all` con imagen hasta disponer de una fusión booleana segura.
+- `codes+template`: ya no se bloquea. Es un artefacto deliberadamente de dos etapas; conservar `layer_background`, capas positivas, metadata `requires_secondary_operation=true`, sufijo `_NEGATIVE_2PASS` y advertencias.

@@ -7,7 +7,7 @@
  * cada cambio. Ninguna función de este archivo transmite movimiento, potencia ni encendido al láser.
  */
 /** WHY: Estado efímero de la sesión web; evita variables globales dispersas y nunca sustituye al histórico SQLite. */
-const state = { catalog:null, csvRows:[], csvHeaders:[], assignments:[], lastSvg:'', lastTemplate:null, machineCaptures:null, lightburnArtifacts:[], lasergrblArtifacts:[], materialReference:null, calibration:null, designerTemplate:null, designerSelected:-1, designerScale:1, designerPreviewTimer:null, individualPreviewTimer:null, batchExported:false, lastQuality:null };
+const state = { catalog:null, csvRows:[], csvHeaders:[], assignments:[], lastSvg:'', lastTemplate:null, machineCaptures:null, lightburnArtifacts:[], lasergrblArtifacts:[], materialReference:null, calibration:null, designerTemplate:null, designerSelected:-1, designerScale:1, designerPreviewTimer:null, individualPreviewTimer:null, batchExported:false, lastQuality:null, csvSheet:null, recordIndex:0, designerSelection:[], designerHistory:{past:[],future:[],lastLabel:'',lastAt:0}, mappingFocus:null };
 /** WHY: Acceso DOM corto y centralizado para mantener legibles los flujos del operador. */
 const $ = (id)=>document.getElementById(id);
 /** WHY: Escapa texto antes de insertarlo en HTML generado y evita que datos del CSV se interpreten como marcado. */
@@ -50,6 +50,44 @@ function fillScannerSelect(el){
   el.addEventListener('change',()=>{ if(el.value)localStorage.setItem('markingScannerId',el.value); else localStorage.removeItem('markingScannerId'); });
 }
 
+/** WHY: El modo físico se hereda de la plantilla y puede sobreescribirse temporalmente sin contaminar el estándar validado. */
+function defaultMarkingMode(){return {polarity:'positive',polarity_scope:'codes',negative_field:'islands',field_margin_mm:0,kerf_compensation_mm:0,validated_on:''};}
+/** WHY: Normaliza plantillas antiguas/nuevas a un contrato de marcado completo sin hardcodear fabricantes. */
+function templateMarkingMode(t){return {...defaultMarkingMode(),...(t?.marking_mode||{})};}
+/** WHY: Refleja en UI el modo físico heredado de la plantilla sin modificarlo hasta una acción explícita. */
+function fillMarkingControls(prefix,t){
+  const m=templateMarkingMode(t);
+  const set=(id,v)=>{const el=$(prefix+id);if(el)el.value=v??'';};
+  set('Polarity',m.polarity);set('PolarityScope',m.polarity_scope);set('NegativeField',m.negative_field);set('FieldMargin',m.field_margin_mm);set('Kerf',m.kerf_compensation_mm);set('ValidatedOn',m.validated_on);
+  toggleMarkingControls(prefix);
+}
+/** WHY: Convierte controles visibles en un MarkingMode genérico reutilizable por preview, lote y guardado. */
+function readMarkingControls(prefix){
+  const val=(id,def='')=>$(prefix+id)?$(prefix+id).value:def;
+  return {polarity:val('Polarity','positive'),polarity_scope:val('PolarityScope','codes'),negative_field:val('NegativeField','islands'),field_margin_mm:Number(val('FieldMargin',0))||0,kerf_compensation_mm:Number(val('Kerf',0))||0,validated_on:val('ValidatedOn','').trim()};
+}
+/** WHY: El sufijo hace imposible confundir artefactos directos, invertidos y los invertidos que requieren segunda operación. */
+function markingFilenameSuffix(mode){if(mode?.polarity!=='negative')return '';return (mode.polarity_scope==='codes'&&mode.negative_field==='template')?'_NEGATIVE_2PASS':'_NEGATIVE';}
+/** WHY: Aplica divulgación progresiva: los ajustes de negativo sólo aparecen cuando el operador los necesita. */
+function toggleMarkingControls(prefix){
+  const neg=$(prefix+'Polarity')?.value==='negative'; const host=$(prefix+'NegativeOptions'); if(host)host.hidden=!neg;
+  const scope=$(prefix+'PolarityScope'), field=$(prefix+'NegativeField');
+  // WHY (v0.8.0 final): codes+template sí se permite, pero representa un artefacto
+  // de DOS ETAPAS. El fondo/código y el contenido positivo quedan en capas separadas;
+  // el software de la máquina debe asignar la segunda operación de forma explícita.
+  if(field){const templateOpt=[...field.options].find(o=>o.value==='template'); if(templateOpt)templateOpt.disabled=false;}
+}
+/** WHY: Mantiene sincronizados preview y preflight al cambiar una propiedad física sin duplicar listeners por pantalla. */
+function bindMarkingControls(prefix,onChange){
+  ['Polarity','PolarityScope','NegativeField','FieldMargin','Kerf','ValidatedOn'].forEach(s=>{const el=$(prefix+s);if(!el)return;el.addEventListener(s==='ValidatedOn'||s==='FieldMargin'||s==='Kerf'?'input':'change',()=>{toggleMarkingControls(prefix);onChange?.();});});
+}
+/** WHY: Un override de prueba no debe contaminar una plantilla validada hasta que el operador decida persistirlo explícitamente. */
+async function saveMarkingModeToTemplate(selectId,prefix,target){
+  const t=deepClone(selectedTemplate(selectId)); if(!t)return; t.marking_mode=readMarkingControls(prefix); clear($(target));
+  try{const r=await api('/api/templates/save',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template:t})});const j=await r.json();await refreshCatalogAfterTemplateSave(t.id);msg($(target),`Modo guardado en plantilla · versión ${j.version||selectedTemplate(selectId)?.version||''}`,'ok');}
+  catch(e){msg($(target),e.message,'bad');}
+}
+
 /** WHY: Resume capacidades disponibles en la portada para que el operador confirme de un vistazo que la estación cargó catálogo, máquina y lector. */
 function renderHomeStatus(){
   if(!state.catalog){$('homeStatus').textContent='Catálogo aún no disponible.';return;}
@@ -64,7 +102,7 @@ async function loadAll(){
   state.catalog=await (await api('/api/catalog')).json();
   ['individualTemplate','batchTemplate','configTemplate'].forEach(id=>fillSelect($(id),state.catalog.templates));
   fillSelect($('configJig'),state.catalog.jigs,x=>`${x.name} · ${x.capacity} pos.`); fillSelect($('designerQuality'),state.catalog.quality_profiles); fillScannerSelect($('individualScanner')); fillScannerSelect($('designerScanner'));
-  fillSelect($('machineImportProfile'),state.catalog.machines); fillSelect($('shopPresetMachine'),state.catalog.machines); fillSelect($('calibrationJig'),state.catalog.jigs,x=>`${x.name} · ${x.capacity} pos.`);
+  fillSelect($('machineImportProfile'),state.catalog.machines); fillSelect($('shopPresetMachine'),state.catalog.machines); fillScannerSelect($('shopPresetScanner')); fillSelect($('calibrationJig'),state.catalog.jigs,x=>`${x.name} · ${x.capacity} pos.`);
   renderMachineCards(); renderScannerCards(); renderIndividualFields(); updateBatchJigs(); loadConfigEditors(); initVisualDesigner(); renderHomeStatus(); updateBatchStepper();
   await loadMachineCaptures(); await refreshPorts();
 }
@@ -86,17 +124,17 @@ function renderQualityResult(target, report){
   html+=`<div class="messages">${(report.notes||[]).map(n=>`<div class="msg warn">${esc(n)}</div>`).join('')}</div>`; host.innerHTML=html;
 }
 /** WHY: Ejecuta una comprobación independiente de legibilidad antes del handoff al software de la máquina. */
-async function runCodeQuality(template,data,scannerId,target){
+async function runCodeQuality(template,data,scannerId,target,markingMode=null){
   const host=$(target); host.innerHTML='<div class="msg">Evaluando geometría, lector y degradaciones digitales…</div>';
   try{
-    const r=await api('/api/quality/check',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template,data,capture_mode:'manual',scanner_profile_id:scannerId||null,digital_stress:true})});
+    const r=await api('/api/quality/check',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template,data,capture_mode:'manual',scanner_profile_id:scannerId||null,digital_stress:true,marking_mode_override:markingMode})});
     renderQualityResult(target,await r.json());
   }catch(e){host.innerHTML='';msg(host,e.message,'bad');}
 }
 
 /** WHY: Construye captura manual desde los campos/reglas de la plantilla, incluida la ayuda de prefijos. */
 function renderIndividualFields(){
-  const t=selectedTemplate('individualTemplate'); state.lastTemplate=t; const fields=sourceFields(t);
+  const t=selectedTemplate('individualTemplate'); state.lastTemplate=t; fillMarkingControls('individual',t); const fields=sourceFields(t);
   $('individualFields').innerHTML=fields.map(f=>{const rule=(t.input_rules||[]).find(r=>r.field===f); const prefix=rule?.manual_prefix_enabled?`<span class="hint">Prefijo manual automático: <strong>${esc(rule.manual_prefix)}</strong> · CSV: ${esc(rule.imported_values)}</span>`:''; return `<label>${esc(f)}<input data-field="${esc(f)}" placeholder="${esc(f)}" />${prefix}</label>`;}).join('');
   const defaults=t.metadata?.example_data||{};
   $('individualFields').querySelectorAll('input').forEach(i=>{ if(defaults[i.dataset.field]) i.value=defaults[i.dataset.field]; i.addEventListener('input',scheduleIndividualPreview); });
@@ -106,34 +144,91 @@ $('individualTemplate').addEventListener('change',renderIndividualFields);
 /** WHY: Agrupa pulsaciones rápidas antes de renderizar para ofrecer preview vivo sin saturar el backend con una petición por tecla. */
 function scheduleIndividualPreview(){clearTimeout(state.individualPreviewTimer);state.individualPreviewTimer=setTimeout(renderIndividual,160);}
 /** WHY: Renderiza la vista previa individual con el mismo motor SVG que luego se exporta. */
-async function renderIndividual(){ const t=selectedTemplate('individualTemplate'); const data={}; $('individualFields').querySelectorAll('input').forEach(i=>data[i.dataset.field]=i.value.trim()); clear($('renderWarnings')); if($('individualQualityResult'))$('individualQualityResult').innerHTML=''; try{ const r=await api('/api/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template_id:t.id,data,capture_mode:'manual',output:'svg'})}); const j=await r.json(); state.lastSvg=j.svg; $('preview').innerHTML=j.svg; $('markSize').textContent=`${j.width_mm} × ${j.height_mm} mm`; j.warnings.forEach(w=>msg($('renderWarnings'),w,'warn')); if(j.calibration_required) msg($('renderWarnings'),'Plantilla pendiente de calibración física antes de producción.','warn'); }catch(e){msg($('renderWarnings'),e.message,'bad');}}
+async function renderIndividual(){ const t=selectedTemplate('individualTemplate'); const data={}; $('individualFields').querySelectorAll('input').forEach(i=>data[i.dataset.field]=i.value.trim()); clear($('renderWarnings')); if($('individualQualityResult'))$('individualQualityResult').innerHTML=''; try{ const r=await api('/api/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template_id:t.id,data,capture_mode:'manual',output:'svg',marking_mode_override:readMarkingControls('individual')})}); const j=await r.json(); state.lastSvg=j.svg; $('preview').innerHTML=j.svg; $('markSize').textContent=`${j.width_mm} × ${j.height_mm} mm`; j.warnings.forEach(w=>msg($('renderWarnings'),w,'warn')); if(j.calibration_required) msg($('renderWarnings'),'Plantilla pendiente de calibración física antes de producción.','warn'); }catch(e){msg($('renderWarnings'),e.message,'bad');}}
 $('renderBtn').addEventListener('click',renderIndividual);
-$('downloadSvgBtn').addEventListener('click',()=>{ if(state.lastSvg) downloadBlob(new Blob([state.lastSvg],{type:'image/svg+xml'}),`${$('individualTemplate').value}.svg`); });
-$('downloadPngBtn').addEventListener('click',async()=>{ const t=selectedTemplate('individualTemplate'); const data={}; $('individualFields').querySelectorAll('input').forEach(i=>data[i.dataset.field]=i.value.trim()); try{ const r=await api('/api/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template_id:t.id,data,capture_mode:'manual',output:'png',dpi:600})}); downloadBlob(await r.blob(),`${t.id}-600dpi.png`);}catch(e){msg($('renderWarnings'),e.message,'bad');} });
-$('individualQualityBtn').addEventListener('click',()=>{const t=selectedTemplate('individualTemplate');const data={};$('individualFields').querySelectorAll('input').forEach(i=>data[i.dataset.field]=i.value.trim());runCodeQuality(t,data,$('individualScanner').value,'individualQualityResult');});
+$('downloadSvgBtn').addEventListener('click',()=>{ if(state.lastSvg) downloadBlob(new Blob([state.lastSvg],{type:'image/svg+xml'}),`${$('individualTemplate').value}${markingFilenameSuffix(readMarkingControls('individual'))}.svg`); });
+$('downloadPngBtn').addEventListener('click',async()=>{ const t=selectedTemplate('individualTemplate'); const data={}; $('individualFields').querySelectorAll('input').forEach(i=>data[i.dataset.field]=i.value.trim()); try{ const r=await api('/api/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template_id:t.id,data,capture_mode:'manual',output:'png',dpi:600,marking_mode_override:readMarkingControls('individual')})}); downloadBlob(await r.blob(),`${t.id}${markingFilenameSuffix(readMarkingControls('individual'))}-600dpi.png`);}catch(e){msg($('renderWarnings'),e.message,'bad');} });
+$('individualQualityBtn').addEventListener('click',()=>{const t=selectedTemplate('individualTemplate');const data={};$('individualFields').querySelectorAll('input').forEach(i=>data[i.dataset.field]=i.value.trim());runCodeQuality(t,data,$('individualScanner').value,'individualQualityResult',readMarkingControls('individual'));});
 
 /** WHY: Precarga serie/prefijo desde la plantilla para reducir errores de captura sin imponerlos al CSV. */
 function updateSeriesDefaultsFromTemplate(){const t=selectedTemplate('batchTemplate');if(!t)return;const field=primaryIdentityField(t)||sourceFields(t)[0]||'';const rule=(t.input_rules||[]).find(r=>r.field===field);$('seriesField').value=field;$('seriesPrefix').value=rule?.manual_prefix_enabled?rule.manual_prefix:'';$('seriesSuffix').value=rule?.manual_suffix_enabled?rule.manual_suffix:'';}
 /** WHY: Filtra jigs compatibles por plantilla/categoría y conserva opciones genéricas cuando no hay uno específico. */
-function updateBatchJigs(){ const t=selectedTemplate('batchTemplate'); const exact=state.catalog.jigs.filter(j=>j.template_id===t.id); const category=state.catalog.jigs.filter(j=>j.target_category===t.category && !exact.some(e=>e.id===j.id)); const generic=state.catalog.jigs.filter(j=>j.target_category==='generic' && !exact.some(e=>e.id===j.id) && !category.some(e=>e.id===j.id)); const list=[...exact,...category,...generic]; fillSelect($('batchJig'),list.length?list:state.catalog.jigs,x=>`${x.name} · ${x.capacity} pos.`); updateSeriesDefaultsFromTemplate(); updateJigSummary(); buildMapping(); }
+function updateBatchJigs(){ const t=selectedTemplate('batchTemplate'); fillMarkingControls('batch',t); const exact=state.catalog.jigs.filter(j=>j.template_id===t.id); const category=state.catalog.jigs.filter(j=>j.target_category===t.category && !exact.some(e=>e.id===j.id)); const generic=state.catalog.jigs.filter(j=>j.target_category==='generic' && !exact.some(e=>e.id===j.id) && !category.some(e=>e.id===j.id)); const list=[...exact,...category,...generic]; fillSelect($('batchJig'),list.length?list:state.catalog.jigs,x=>`${x.name} · ${x.capacity} pos.`); updateSeriesDefaultsFromTemplate(); updateJigSummary(); buildMapping(); }
 $('batchTemplate').addEventListener('change',updateBatchJigs); $('batchJig').addEventListener('change',updateJigSummary);
 /** WHY: Expone capacidad/calibración y dibuja los slots antes de asignar datos físicos. */
 function updateJigSummary(){ if(!state.catalog)return; const j=state.catalog.jigs.find(x=>x.id===$('batchJig').value); $('jigCapacity').textContent=j?`${j.capacity} posiciones · ${j.calibration_required?'calibración requerida':'aprobado'}`:''; if(j){ updateBatchProgress(); $('jigGrid').style.gridTemplateColumns=`repeat(${j.grid.cols}, minmax(0,1fr))`; $('jigGrid').innerHTML=j.slots.map(s=>`<div class="slot" data-slot="${s.slot_index}"><div>Pos. ${s.slot_index}</div><div class="slot-id muted">vacía</div></div>`).join(''); } }
 
 /** WHY: Carga CSV o lista flexible y delega detección de encabezados al backend antes de mapear columnas. */
+/** WHY: La tabla de vista previa es la única forma de que el operador confirme que
+ *  el archivo se leyó como esperaba ANTES de acomodar equipo físico. Sin ella, un
+ *  delimitador mal detectado o la hoja equivocada sólo se descubren tras grabar. */
+function renderDataPreview(j){
+  const box=$('csvPreviewTable'); if(!box)return;
+  if(!j||!j.preview||!j.preview.length){box.innerHTML='';return;}
+  const heads=j.headers||[];
+  const head=heads.map(h=>`<th data-column="${esc(h)}">${esc(h)}</th>`).join('');
+  const body=j.preview.map((row,i)=>`<tr><td class="muted">${i+1}</td>${heads.map(h=>`<td data-column="${esc(h)}">${esc(row[h]??'')}</td>`).join('')}</tr>`).join('');
+  const origen=j.format==='xlsx'?`hoja «${esc(j.sheet||'')}»`:(j.delimiter?`delimitador «${esc(j.delimiter)}»`:'texto plano');
+  box.innerHTML=`<div class="muted preview-caption">Mostrando ${j.preview.length} de ${j.count} registros · ${origen}</div>`+
+    `<div class="preview-scroll"><table><thead><tr><th>#</th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+/** WHY: Se consultan las hojas por separado para que el selector exista ANTES de
+ *  interpretar los datos; asumir la primera hoja es el error clásico con libros
+ *  que empiezan con una portada o un instructivo. */
+async function loadSheetsIfWorkbook(f){
+  const wrap=$('csvSheetWrap'), sel=$('csvSheet');
+  if(!wrap||!sel)return null;
+  const fd=new FormData(); fd.append('file',f);
+  try{
+    const j=await (await api('/api/data/sheets',{method:'POST',body:fd})).json();
+    if(j.format!=='xlsx'||!j.sheets.length){wrap.hidden=true;sel.innerHTML='';return null;}
+    const previous=state.csvSheet;
+    const keep=j.sheets.includes(previous)?previous:j.sheets[0];
+    sel.innerHTML=j.sheets.map(s=>`<option value="${esc(s)}"${s===keep?' selected':''}>${esc(s)}</option>`).join('');
+    wrap.hidden=false; state.csvSheet=keep; return keep;
+  }catch(e){wrap.hidden=true;sel.innerHTML='';return null;}
+}
+
+/** WHY: Punto de entrada único para cualquier archivo de datos: primero resuelve
+ *  las hojas si es un libro y sólo después interpreta el contenido. */
 async function loadCsvFile(){
   clear($('csvInfo')); const f=$('csvFile').files[0]; if(!f)return;
-  const fd=new FormData(); fd.append('file',f); const mode=$('csvHeaderMode').value||'auto';
+  const sheet=await loadSheetsIfWorkbook(f);
+  await inspectDataFile(f,sheet);
+}
+
+/** WHY: Aísla la llamada de inspección para poder repetirla al cambiar hoja,
+ *  modo de encabezado o tamaño de vista previa sin volver a pedir el archivo. */
+async function inspectDataFile(f,sheet){
+  const fd=new FormData(); fd.append('file',f);
+  const mode=$('csvHeaderMode').value||'auto';
+  const limit=Math.max(1,Math.min(500,Number($('csvPreviewLimit')?.value)||25));
+  let url=`/api/csv/inspect?header_mode=${encodeURIComponent(mode)}&preview_limit=${limit}`;
+  if(sheet) url+=`&sheet=${encodeURIComponent(sheet)}`;
   try{
-    const r=await api(`/api/csv/inspect?header_mode=${encodeURIComponent(mode)}`,{method:'POST',body:fd}); const j=await r.json();
-    state.csvRows=j.rows; state.csvHeaders=j.headers; state.assignments=[]; state.batchExported=false; $('batchOffset').value=0;
+    const j=await (await api(url,{method:'POST',body:fd})).json();
+    state.csvRows=j.rows; state.csvHeaders=j.headers; state.csvSheet=j.sheet||null;
+    state.assignments=[]; state.batchExported=false; state.recordIndex=0; $('batchOffset').value=0;
     msg($('csvInfo'),`${j.count} registros · columnas detectadas: ${j.headers.join(', ')}`,'ok');
+    if(j.format==='xlsx') msg($('csvInfo'),`Leído desde la hoja «${j.sheet}». Si el inventario está en otra hoja, cámbiela arriba.`,'ok');
     if(j.headers.length===1) msg($('csvInfo'),'Lista de una sola columna: se asignará automáticamente al/los campos de la plantilla; puede cambiar el mapeo si lo desea.','ok');
-    buildMapping(); updateBatchProgress(); updateBatchStepper(); await renderBatchRecordPreview();
+    renderDataPreview(j);
+    buildMapping(); updateBatchProgress(); updateBatchStepper(); updateRecordNav(); await renderBatchRecordPreview();
   }catch(e){msg($('csvInfo'),e.message,'bad');}
 }
+
+/** WHY: Recargar con el mismo archivo evita pedirle al usuario que lo vuelva a
+ *  seleccionar cada vez que corrige el modo de encabezado o la hoja. */
+function reinspectCurrentFile(){
+  const f=$('csvFile').files[0]; if(!f)return;
+  clear($('csvInfo'));
+  inspectDataFile(f,$('csvSheetWrap')&&!$('csvSheetWrap').hidden?$('csvSheet').value:null);
+}
 $('csvFile').addEventListener('change',loadCsvFile);
-$('csvHeaderMode').addEventListener('change',loadCsvFile);
+$('csvHeaderMode').addEventListener('change',reinspectCurrentFile);
+if($('csvSheet')) $('csvSheet').addEventListener('change',reinspectCurrentFile);
+if($('csvPreviewLimit')) $('csvPreviewLimit').addEventListener('change',reinspectCurrentFile);
 /** WHY: Crea lotes secuenciales sólo bajo una regla explícita aportada por el usuario. */
 async function generateSeries(){ clear($('csvInfo')); const body={field:$('seriesField').value.trim(),prefix:$('seriesPrefix').value,start:Number($('seriesStart').value)||0,count:Number($('seriesCount').value)||1,width:Number($('seriesWidth').value)||0,suffix:$('seriesSuffix').value}; try{ const r=await api('/api/series/generate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); const j=await r.json(); state.csvRows=j.rows; state.csvHeaders=[j.field]; state.assignments=[]; state.batchExported=false; $('batchOffset').value=0; buildMapping(); updateBatchProgress(); updateBatchStepper(); msg($('csvInfo'),`${j.count} registros generados · ${j.first} → ${j.last}`,'ok'); msg($('csvInfo'),j.warning,'warn'); }catch(e){msg($('csvInfo'),e.message,'bad');} }
 $('generateSeriesBtn').addEventListener('click',generateSeries);
@@ -165,18 +260,76 @@ function bestHeader(field){
 /** WHY: Construye el mapeo plantilla↔CSV de forma dinámica, incluida la lista de una sola columna. */
 function buildMapping(){
   if(!state.catalog)return; const t=selectedTemplate('batchTemplate'); const fields=sourceFields(t);
-  $('fieldMapping').innerHTML=fields.map(f=>{const chosen=bestHeader(f); const opts=['',...state.csvHeaders].map(h=>`<option value="${esc(h)}" ${h===chosen?'selected':''}>${h?esc(h):'— sin mapear —'}</option>`).join('');return `<label>${esc(f)}<select data-mapfield="${esc(f)}">${opts}</select></label>`;}).join('');
-  $('fieldMapping').querySelectorAll('select').forEach(x=>x.addEventListener('change',renderBatchRecordPreview));
+  // Cada fila del panel enumera los elementos de la plantilla que consumen ese campo.
+  // Ver "serial → barcode_serial, text_serial" es lo que convierte el mapeo en algo
+  // comprensible para alguien que nunca abrió el JSON de la plantilla.
+  $('fieldMapping').innerHTML=fields.map(f=>{
+    const chosen=bestHeader(f);
+    const opts=['',...state.csvHeaders].map(h=>`<option value="${esc(h)}" ${h===chosen?'selected':''}>${h?esc(h):'— sin mapear —'}</option>`).join('');
+    const consumers=elementsUsingField(t,f);
+    const chips=consumers.length?consumers.map(c=>`<span class="chip">${esc(c)}</span>`).join(''):'<span class="chip muted">sin elemento</span>';
+    return `<div class="map-row" data-maprow="${esc(f)}"><label>${esc(f)}<select data-mapfield="${esc(f)}">${opts}</select></label><div class="map-consumers">${chips}</div></div>`;
+  }).join('');
+  $('fieldMapping').querySelectorAll('select').forEach(x=>{
+    x.addEventListener('change',()=>{focusMappingField(x.dataset.mapfield);renderBatchRecordPreview();});
+    x.addEventListener('focus',()=>focusMappingField(x.dataset.mapfield));
+  });
+  $('fieldMapping').querySelectorAll('.map-row').forEach(r=>r.addEventListener('click',()=>focusMappingField(r.dataset.maprow)));
   renderBatchRecordPreview();
+}
+
+/** WHY: Lista los elementos de la plantilla alimentados por un campo. Un campo puede
+ *  alimentar varios objetos a la vez (el barcode y el texto legible del mismo serial),
+ *  y ocultarlo es justo lo que hace que un mapeo equivocado pase inadvertido. */
+function elementsUsingField(template,field){
+  return (template?.elements||[])
+    .filter(el=>String(el.source||'').split('|').map(x=>x.trim()).includes(field))
+    .map((el,i)=>el.name||el.label||`${el.kind}_${i+1}`);
+}
+
+/** WHY: Un único punto de verdad para el resaltado cruzado: panel de mapeo, columna de
+ *  la tabla de datos y elementos del lienzo se iluminan desde el mismo estado. */
+function focusMappingField(field){
+  state.mappingFocus=(state.mappingFocus===field)?null:field;
+  const column=state.mappingFocus?(document.querySelector(`[data-mapfield="${CSS.escape(state.mappingFocus)}"]`)?.value||''):'';
+  $('fieldMapping').querySelectorAll('.map-row').forEach(r=>r.classList.toggle('focused',r.dataset.maprow===state.mappingFocus));
+  const table=$('csvPreviewTable');
+  if(table){
+    table.querySelectorAll('th,td').forEach(c=>c.classList.toggle('column-hit',!!column&&c.dataset.column===column));
+  }
+  if(state.designerTemplate) renderDesignerCanvas();
 }
 /** WHY: Aplica el mapeo elegido y produce filas con los nombres que espera la plantilla. */
 function mappedRows(){ const maps={}; $('fieldMapping').querySelectorAll('select').forEach(s=>{if(s.value)maps[s.dataset.mapfield]=s.value;}); return state.csvRows.map(r=>{const x={...r}; for(const [target,src] of Object.entries(maps)) x[target]=r[src]??''; return x;}); }
 /** WHY: Previsualiza un registro mapeado para detectar errores antes de preparar posiciones o exportar. */
+/** WHY: Poder saltar al primero, al último o a uno aleatorio es lo que permite
+ *  detectar desbordes por longitud de dato sin revisar mil registros a mano. */
+function updateRecordNav(){
+  const total=state.csvRows.length;
+  if($('recTotal')) $('recTotal').textContent=`/ ${total}`;
+  if($('recIndex')){ $('recIndex').max=Math.max(1,total); $('recIndex').value=total?state.recordIndex+1:1; }
+}
+/** WHY: Acota el índice al rango real del dataset para que un valor escrito a mano
+ *  nunca deje la vista previa apuntando a un registro inexistente. */
+function gotoRecord(index){
+  const total=state.csvRows.length; if(!total)return;
+  state.recordIndex=Math.max(0,Math.min(total-1,index));
+  updateRecordNav(); renderBatchRecordPreview();
+}
+if($('recFirstBtn')) $('recFirstBtn').addEventListener('click',()=>gotoRecord(0));
+if($('recPrevBtn')) $('recPrevBtn').addEventListener('click',()=>gotoRecord(state.recordIndex-1));
+if($('recNextBtn')) $('recNextBtn').addEventListener('click',()=>gotoRecord(state.recordIndex+1));
+if($('recLastBtn')) $('recLastBtn').addEventListener('click',()=>gotoRecord(state.csvRows.length-1));
+if($('recRandomBtn')) $('recRandomBtn').addEventListener('click',()=>gotoRecord(Math.floor(Math.random()*state.csvRows.length)));
+if($('recIndex')) $('recIndex').addEventListener('change',()=>gotoRecord((Number($('recIndex').value)||1)-1));
+
+/** WHY: Renderiza el registro seleccionado con el motor real de producción, no con
+ *  una aproximación del navegador, para que lo revisado sea lo que se grabará. */
 async function renderBatchRecordPreview(){
   if(!$('batchRecordPreview'))return; clear($('batchPreviewMsg'));
-  if(!state.csvRows.length){$('batchRecordPreview').innerHTML='<span class="muted">Cargue datos para previsualizar.</span>';return;}
-  const rows=mappedRows(); const row=rows[0]||{}; const t=selectedTemplate('batchTemplate');
-  try{const r=await api('/api/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template_id:t.id,data:row,capture_mode:'import',output:'svg'})});const j=await r.json();$('batchRecordPreview').innerHTML=j.svg;(j.warnings||[]).forEach(w=>msg($('batchPreviewMsg'),w,'warn'));}
+  if(!state.csvRows.length){$('batchRecordPreview').innerHTML='<span class="muted">Cargue datos para previsualizar.</span>';updateRecordNav();return;}
+  const rows=mappedRows(); const row=rows[Math.min(state.recordIndex,rows.length-1)]||{}; const t=selectedTemplate('batchTemplate');
+  try{const r=await api('/api/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template_id:t.id,data:row,capture_mode:'import',output:'svg',marking_mode_override:readMarkingControls('batch')})});const j=await r.json();$('batchRecordPreview').innerHTML=j.svg;(j.warnings||[]).forEach(w=>msg($('batchPreviewMsg'),w,'warn'));}
   catch(e){$('batchRecordPreview').innerHTML='<span class="muted">No se pudo generar vista previa.</span>';msg($('batchPreviewMsg'),e.message,'bad');}
 }
 /** WHY: Obtiene la identidad definida por la plantilla para conciliación y nombres de archivo. */
@@ -191,16 +344,285 @@ function renderAssignments(rows,jig){ $('jigGrid').querySelectorAll('.slot').for
   $('assignmentTable').innerHTML=`<div class="table-wrap"><table><thead><tr><th>Posición</th><th>Fila CSV</th><th>Esperado</th><th>ID escrito / leído físicamente</th><th>Estado</th></tr></thead><tbody>${state.assignments.map((a,i)=>{const expected=candidateId(rows[a.row_index]);return `<tr><td>${a.slot_index}</td><td>${a.row_index+1}</td><td><strong>${esc(expected)}</strong></td><td><input data-phys="${i}" value="${esc(a.physical_id)}" autocomplete="off"></td><td data-match="${i}" class="muted">pendiente</td></tr>`;}).join('')}</tbody></table></div>`;
   $('assignmentTable').querySelectorAll('[data-phys]').forEach(inp=>inp.addEventListener('input',()=>{const i=Number(inp.dataset.phys);state.assignments[i].physical_id=inp.value;const expected=candidateId(rows[state.assignments[i].row_index]);const ok=inp.value.trim().toUpperCase()===String(expected).trim().toUpperCase();const td=$('assignmentTable').querySelector(`[data-match="${i}"]`);td.textContent=inp.value?(ok?'coincide':'NO coincide'):'pendiente';td.className=inp.value?(ok?'status-ok':'status-bad'):'muted';})); }
 $('simulationFillBtn').addEventListener('click',()=>{const rows=mappedRows();state.assignments.forEach(a=>a.physical_id=candidateId(rows[a.row_index]));const jig=state.catalog.jigs.find(x=>x.id===$('batchJig').value);renderAssignments(rows,jig);msg($('batchMessages'),'Confirmaciones prellenadas solo para simulación/demo.','warn');});
-$('exportBatchBtn').addEventListener('click',async()=>{clear($('batchMessages')); if(!state.assignments.length){msg($('batchMessages'),'Prepare posiciones primero.','bad');return;} const rows=mappedRows(); const body={template_id:$('batchTemplate').value,jig_id:$('batchJig').value,material_preset_id:$('batchMaterialPreset').value?Number($('batchMaterialPreset').value):null,rows,assignments:state.assignments,require_physical_confirmation:$('requireConfirmation').checked,output_dpi:300}; try{ const r=await api('/api/batch/export',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); const job=r.headers.get('X-Job-Id'); downloadBlob(await r.blob(),`marking-job-${job?.slice(0,8)||'batch'}.zip`); state.batchExported=true; updateBatchStepper(); msg($('batchMessages'),`Trabajo exportado y registrado: ${job}`,'ok'); const jig=state.catalog.jigs.find(x=>x.id===$('batchJig').value); const offset=Math.max(0,Number($('batchOffset').value)||0); if(offset+jig.capacity<state.csvRows.length) msg($('batchMessages'),'Lote listo. Use «Siguiente lote» para continuar sin recalcular posiciones.','ok'); }catch(e){msg($('batchMessages'),e.message,'bad');} });
+/** WHY: Genera el ZIP de trabajo colocado sobre el jig. Separado del modo de salida
+ *  para que la conciliación física siga siendo obligatoria sólo en esta ruta. */
+async function exportJigJob(){
+  if(!state.assignments.length){msg($('batchMessages'),'Prepare posiciones primero.','bad');return false;}
+  const rows=mappedRows();
+  const body={template_id:$('batchTemplate').value,jig_id:$('batchJig').value,material_preset_id:$('batchMaterialPreset').value?Number($('batchMaterialPreset').value):null,rows,assignments:state.assignments,require_physical_confirmation:$('requireConfirmation').checked,output_dpi:300,marking_mode_override:readMarkingControls('batch'),export_mode:$('svgExportMode')?.value||'production'};
+  const r=await api('/api/batch/export',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const job=r.headers.get('X-Job-Id');
+  downloadBlob(await r.blob(),`marking-job-${job?.slice(0,8)||'batch'}.zip`);
+  msg($('batchMessages'),`Trabajo exportado y registrado: ${job}`,'ok');
+  const jig=state.catalog.jigs.find(x=>x.id===$('batchJig').value);
+  const offset=Math.max(0,Number($('batchOffset').value)||0);
+  if(offset+jig.capacity<state.csvRows.length) msg($('batchMessages'),'Lote listo. Use «Siguiente lote» para continuar sin recalcular posiciones.','ok');
+  return true;
+}
 
-$('exportAllSvgBtn').addEventListener('click',async()=>{
-  clear($('batchMessages')); if(!state.csvRows.length){msg($('batchMessages'),'Cargue un CSV o genere una serie primero.','bad');return;}
-  const rows=mappedRows(); const t=selectedTemplate('batchTemplate'); const filenameField=primaryIdentityField(t)||null;
-  try{const r=await api('/api/bulk/svg-export',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template_id:t.id,rows,filename_field:filenameField})}); const count=r.headers.get('X-Record-Count')||rows.length; downloadBlob(await r.blob(),`${t.id}-${count}-svg.zip`); state.batchExported=true; updateBatchStepper(); msg($('batchMessages'),`Generados ${count} SVG individuales desde la misma plantilla. Importe después en el software de la máquina.`,'ok');}catch(e){msg($('batchMessages'),e.message,'bad');}
+/** WHY: Un SVG por registro no requiere jig ni conciliación; sirve para recomponer
+ *  después en LightBurn o para procesos que no usan una base física. */
+async function exportIndividualSvgs(){
+  if(!state.csvRows.length){msg($('batchMessages'),'Cargue datos o genere una serie primero.','bad');return false;}
+  const rows=mappedRows(); const t=selectedTemplate('batchTemplate');
+  const pattern=($('filenamePattern')?.value||'').trim();
+  const body={template_id:t.id,rows,export_mode:$('svgExportMode')?.value||'production',marking_mode_override:readMarkingControls('batch'),filename_pattern:$('filenamePattern')?.value.trim()||null};
+  if(pattern) body.filename_pattern=pattern; else body.filename_field=primaryIdentityField(t)||null;
+  const r=await api('/api/bulk/svg-export',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+  const count=r.headers.get('X-Record-Count')||rows.length;
+  downloadBlob(await r.blob(),`${t.id}-${count}-svg.zip`);
+  msg($('batchMessages'),`Generados ${count} SVG individuales desde la misma plantilla. Importe después en el software de la máquina.`,'ok');
+  return true;
+}
+
+/** WHY: El modo de salida se decide una sola vez y en un solo control, para que el
+ *  operador no tenga que saber qué botón corresponde a qué tipo de entrega. */
+function selectedOutputMode(){
+  const picked=document.querySelector('input[name="outputMode"]:checked');
+  return picked?picked.value:'jig';
+}
+
+$('exportBatchBtn').addEventListener('click',async()=>{
+  clear($('batchMessages'));
+  const mode=selectedOutputMode();
+  try{
+    let ok=false;
+    if(mode==='jig'||mode==='both') ok=await exportJigJob();
+    if((mode==='individual'||mode==='both') && (mode==='individual'||ok)) ok=await exportIndividualSvgs()||ok;
+    if(ok){state.batchExported=true; updateBatchStepper();}
+  }catch(e){msg($('batchMessages'),e.message,'bad');}
 });
 
 $('verifyBtn').addEventListener('click',async()=>{clear($('verifyResult'));try{const r=await api('/api/scan/verify',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({expected:$('verifyExpected').value,scanned:$('verifyScanned').value,normalize:$('verifyNormalize').checked})});const j=await r.json();msg($('verifyResult'),j.matched?'COINCIDE — marcado verificado':'NO COINCIDE — no liberar el equipo',j.matched?'ok':'bad');if(j.history_update)msg($('verifyResult'),JSON.stringify(j.history_update),j.history_update.updated?'ok':'warn');}catch(e){msg($('verifyResult'),e.message,'bad');}});
 $('verifyScanned').addEventListener('keydown',e=>{if(e.key==='Enter')$('verifyBtn').click();});
+
+/** WHY: El historial guarda el estado ANTES de cada operación lógica, no después de
+ *  cada píxel. Un arrastre completo es una sola entrada, así Ctrl+Z devuelve el objeto
+ *  a donde estaba antes de tomarlo y no obliga a pulsar deshacer doscientas veces. */
+const HISTORY_LIMIT = 60;
+const HISTORY_COALESCE_MS = 700;
+
+/** WHY: Captura el borrador completo antes de mutarlo. Se coalescen ediciones
+ *  consecutivas de la misma propiedad para que escribir "12.5" en X no genere
+ *  cuatro pasos de deshacer, uno por tecla. */
+function pushHistory(label){
+  const t=state.designerTemplate; if(!t)return;
+  const now=Date.now();
+  const h=state.designerHistory;
+  if(label && h.lastLabel===label && (now-h.lastAt)<HISTORY_COALESCE_MS){ h.lastAt=now; return; }
+  h.past.push({template:deepClone(t), selection:[...state.designerSelection], selected:state.designerSelected});
+  if(h.past.length>HISTORY_LIMIT) h.past.shift();
+  h.future.length=0;
+  h.lastLabel=label||''; h.lastAt=now;
+  updateHistoryButtons();
+}
+
+/** WHY: Un snapshot del estado actual; se usa para poder rehacer lo que se deshace. */
+function historySnapshot(){
+  return {template:deepClone(state.designerTemplate), selection:[...state.designerSelection], selected:state.designerSelected};
+}
+
+/** WHY: Restaura un snapshot completo en lugar de aplicar deltas; es más simple de
+ *  auditar y no puede desincronizar el JSON, el lienzo y la vista real. */
+function applySnapshot(snap){
+  state.designerTemplate=snap.template;
+  state.designerSelection=[...snap.selection];
+  state.designerSelected=snap.selected;
+  loadDesignerHeaderFields();
+  renderDesignerFields();
+  renderDesignerCanvas();
+  renderDesignerProperties();
+  scheduleDesignerPreview();
+  updateHistoryButtons();
+}
+
+/** WHY: Deshacer y rehacer comparten estructura para que nunca puedan divergir. */
+function undoDesigner(){
+  const h=state.designerHistory; if(!h.past.length)return;
+  h.future.push(historySnapshot());
+  h.lastLabel=''; applySnapshot(h.past.pop());
+}
+/** WHY: Rehacer es la operación inversa exacta de deshacer; comparte estructura para
+ *  que una pila no pueda quedar desincronizada respecto de la otra. */
+function redoDesigner(){
+  const h=state.designerHistory; if(!h.future.length)return;
+  h.past.push(historySnapshot());
+  h.lastLabel=''; applySnapshot(h.future.pop());
+}
+
+/** WHY: Los botones deshabilitados comunican el estado real del historial; un botón
+ *  siempre activo que no hace nada es peor que uno gris. */
+function updateHistoryButtons(){
+  if($('undoBtn')) $('undoBtn').disabled=!state.designerHistory.past.length;
+  if($('redoBtn')) $('redoBtn').disabled=!state.designerHistory.future.length;
+}
+
+/** WHY: Relee la cabecera del borrador al restaurar historial; sin esto, deshacer un
+ *  cambio de ancho dejaría el formulario mostrando el valor viejo. */
+function loadDesignerHeaderFields(){
+  const t=state.designerTemplate; if(!t)return;
+  if($('designerName')) $('designerName').value=t.name||'';
+  if($('designerId')) $('designerId').value=t.id||'';
+  if($('designerCategory')) $('designerCategory').value=t.category||'';
+  if($('designerWidth')) $('designerWidth').value=t.width_mm;
+  if($('designerHeight')) $('designerHeight').value=t.height_mm;
+  if($('designerQuality')) $('designerQuality').value=t.quality_profile||'';
+}
+
+// ------------------------------------------------------------------ SNAP
+
+/** WHY: El imantado ayuda a componer pero estorba en ajuste fino, así que se puede
+ *  desactivar y su tolerancia se expresa en píxeles de pantalla convertidos a mm:
+ *  a más zoom, menos milímetros de imantado, que es lo que espera el usuario. */
+function snapSettings(){
+  const enabled=$('snapEnabled')?$('snapEnabled').checked:false;
+  const grid=Math.max(.1,Number($('snapGrid')?.value)||0.5);
+  const tolerance=6/Math.max(.0001,state.designerScale||1); // 6 px de pantalla
+  return {enabled,grid,tolerance};
+}
+
+/** WHY: Devuelve las líneas a las que un objeto puede imantarse: rejilla, centro del
+ *  lienzo y bordes/centros de los demás elementos. Excluye el propio objeto para que
+ *  no se imante consigo mismo. */
+function snapCandidates(axis, excludeIndices){
+  const t=state.designerTemplate; const out=[];
+  const span=axis==='x'?t.width_mm:t.height_mm;
+  out.push({value:0,type:'canvas'},{value:span/2,type:'canvas-center'},{value:span,type:'canvas'});
+  t.elements.forEach((el,i)=>{
+    if(excludeIndices.includes(i))return;
+    const b=designerBounds(el);
+    if(axis==='x') out.push({value:b.x,type:'element'},{value:b.x+b.w/2,type:'element-center'},{value:b.x+b.w,type:'element'});
+    else out.push({value:b.y,type:'element'},{value:b.y+b.h/2,type:'element-center'},{value:b.y+b.h,type:'element'});
+  });
+  return out;
+}
+
+/** WHY: Imanta el borde inicial, el centro y el borde final del objeto, no sólo su
+ *  esquina: alinear por centro es lo que más se necesita al componer una etiqueta. */
+function applySnap(axis, position, size, excludeIndices){
+  const {enabled,grid,tolerance}=snapSettings();
+  if(!enabled) return {value:position, guide:null};
+  const candidates=snapCandidates(axis,excludeIndices);
+  let best=null;
+  for(const anchorOffset of [0,size/2,size]){
+    for(const c of candidates){
+      const target=c.value-anchorOffset;
+      const d=Math.abs(target-position);
+      if(d<=tolerance && (!best || d<best.d)) best={d,value:target,guide:c.value};
+    }
+  }
+  if(best) return {value:best.value, guide:{axis,at:best.guide}};
+  const snapped=Math.round(position/grid)*grid;
+  return {value:Math.abs(snapped-position)<=tolerance?snapped:position, guide:null};
+}
+
+/** WHY: Caja física del elemento en mm. El texto se ancla en su línea base, así que su
+ *  caja visual arranca una altura de fuente más arriba; sin esta corrección la
+ *  alineación superior dejaría el texto fuera del lienzo. */
+function designerBounds(el){
+  const size=designerElementSize(el);
+  const y=el.kind==='text'?Math.max(0,el.y_mm-(el.font_size_mm||4)):el.y_mm;
+  return {x:el.x_mm,y,w:size.w,h:size.h};
+}
+
+/** WHY: Traslada un elemento fijando el borde superior de su caja visual, respetando
+ *  la diferencia de anclaje del texto. Centraliza la conversión caja→modelo. */
+function setDesignerBounds(el,x,y){
+  if(x!=null) el.x_mm=Math.max(0,Number(x.toFixed(4)));
+  if(y!=null){
+    const value=el.kind==='text'?y+(el.font_size_mm||4):y;
+    el.y_mm=Math.max(0,Number(value.toFixed(4)));
+  }
+}
+
+/** WHY: Dibuja la guía de imantado sólo mientras dura el arrastre; una guía persistente
+ *  se confundiría con geometría real de la plantilla. */
+function renderSnapGuides(guides){
+  const c=$('designerCanvas'); if(!c)return;
+  c.querySelectorAll('.snap-guide').forEach(g=>g.remove());
+  const sc=state.designerScale;
+  for(const g of guides){
+    if(!g)continue;
+    const d=document.createElement('div');
+    d.className='snap-guide '+(g.axis==='x'?'vertical':'horizontal');
+    if(g.axis==='x') d.style.left=`${g.at*sc}px`; else d.style.top=`${g.at*sc}px`;
+    c.appendChild(d);
+  }
+}
+
+// ------------------------------------------------------- SELECCION MULTIPLE
+
+/** WHY: La selección múltiple es lo que da sentido a alinear y distribuir. Se mantiene
+ *  como lista ordenada; ``designerSelected`` sigue siendo el elemento del inspector
+ *  para no duplicar el concepto de "elemento activo". */
+function setDesignerSelection(indices, primary){
+  state.designerSelection=[...new Set(indices.filter(i=>i>=0))];
+  state.designerSelected=primary!=null?primary:(state.designerSelection.at(-1)??-1);
+  updateSelectionInfo();
+}
+
+/** WHY: Ctrl/Shift+clic alterna pertenencia a la selección; sin modificador, sustituye.
+ *  Es el comportamiento que el usuario ya conoce de cualquier editor. */
+function toggleDesignerSelection(index, additive){
+  if(!additive) return setDesignerSelection([index],index);
+  const sel=new Set(state.designerSelection);
+  if(sel.has(index)){ sel.delete(index); }
+  else sel.add(index);
+  const list=[...sel];
+  setDesignerSelection(list, sel.has(index)?index:(list.at(-1)??-1));
+}
+
+/** WHY: Informa cuántos objetos hay seleccionados porque alinear con uno solo no hace
+ *  nada visible y el usuario necesita saber por qué. */
+function updateSelectionInfo(){
+  const info=$('designerSelectionInfo'); if(!info)return;
+  const n=state.designerSelection.length;
+  info.textContent = n===0 ? 'Sin selección. Ctrl+clic o Shift+clic para seleccionar varios.'
+    : n===1 ? '1 elemento seleccionado. Seleccione 2 o más para alinear o distribuir.'
+    : `${n} elementos seleccionados.`;
+  document.querySelectorAll('#alignGroup button[data-align]').forEach(b=>{
+    const needsThree=b.dataset.align.startsWith('dist-');
+    b.disabled = needsThree ? n<3 : n<2;
+  });
+}
+
+// ------------------------------------------------------------- ALINEACION
+
+/** WHY: Todas las acciones trabajan sobre milímetros físicos y no sobre píxeles del
+ *  lienzo; el zoom no debe cambiar el resultado de alinear. */
+function alignDesignerSelection(action){
+  const t=state.designerTemplate; if(!t)return;
+  const idx=state.designerSelection;
+  const needsThree=action.startsWith('dist-');
+  if(idx.length<(needsThree?3:2))return;
+  pushHistory('align:'+action+':'+Date.now());
+  const items=idx.map(i=>({i,el:t.elements[i],b:designerBounds(t.elements[i])}));
+  const minX=Math.min(...items.map(o=>o.b.x));
+  const maxX=Math.max(...items.map(o=>o.b.x+o.b.w));
+  const minY=Math.min(...items.map(o=>o.b.y));
+  const maxY=Math.max(...items.map(o=>o.b.y+o.b.h));
+  if(action==='left') items.forEach(o=>setDesignerBounds(o.el,minX,null));
+  if(action==='right') items.forEach(o=>setDesignerBounds(o.el,maxX-o.b.w,null));
+  if(action==='center-h'){const c=(minX+maxX)/2;items.forEach(o=>setDesignerBounds(o.el,c-o.b.w/2,null));}
+  if(action==='top') items.forEach(o=>setDesignerBounds(o.el,null,minY));
+  if(action==='bottom') items.forEach(o=>setDesignerBounds(o.el,null,maxY-o.b.h));
+  if(action==='center-v'){const c=(minY+maxY)/2;items.forEach(o=>setDesignerBounds(o.el,null,c-o.b.h/2));}
+  if(action==='dist-h'){
+    const sorted=[...items].sort((a,b)=>a.b.x-b.b.x);
+    const total=sorted.reduce((s,o)=>s+o.b.w,0);
+    const gap=((maxX-minX)-total)/(sorted.length-1);
+    let cursor=minX;
+    sorted.forEach(o=>{setDesignerBounds(o.el,cursor,null);cursor+=o.b.w+gap;});
+  }
+  if(action==='dist-v'){
+    const sorted=[...items].sort((a,b)=>a.b.y-b.b.y);
+    const total=sorted.reduce((s,o)=>s+o.b.h,0);
+    const gap=((maxY-minY)-total)/(sorted.length-1);
+    let cursor=minY;
+    sorted.forEach(o=>{setDesignerBounds(o.el,null,cursor);cursor+=o.b.h+gap;});
+  }
+  renderDesignerCanvas();renderDesignerProperties();scheduleDesignerPreview();
+}
 
 /** WHY: Clona plantillas/elementos editables sin compartir referencias que provocarían cambios accidentales. */
 function deepClone(x){return JSON.parse(JSON.stringify(x));}
@@ -209,7 +631,7 @@ function safeDesignerId(value){return String(value||'').trim().replace(/[^A-Za-z
 /** WHY: Crea el borrador mínimo de una plantilla nueva sin imponer un tipo de equipo. */
 function blankDesignerTemplate(){
   const quality=state.catalog?.quality_profiles?.[0]?.id||'rugged_field_v1';
-  return {id:`custom_${Date.now()}`,name:'Nueva plantilla',version:'1.0',category:'custom',description:'Plantilla creada desde el estudio visual',width_mm:50,height_mm:25,quality_profile:quality,calibration_required:true,expected_fields:['value'],input_rules:[],elements:[],metadata:{primary_identity_field:'value',example_data:{value:'EJEMPLO'},created_with:'visual_designer_v0.6.2'}};
+  return {id:`custom_${Date.now()}`,name:'Nueva plantilla',version:'1.0',category:'custom',description:'Plantilla creada desde el estudio visual',width_mm:50,height_mm:25,quality_profile:quality,calibration_required:true,expected_fields:['value'],input_rules:[],marking_mode:defaultMarkingMode(),elements:[],metadata:{primary_identity_field:'value',example_data:{value:'EJEMPLO'},created_with:'visual_designer_v0.8.0'}};
 }
 /** WHY: Obtiene los campos actuales del borrador para alimentar propiedades, reglas y preview. */
 function designerFields(){return [...new Set((state.designerTemplate?.expected_fields||[]).filter(Boolean))];}
@@ -218,12 +640,12 @@ function syncDesignerHeaderToDraft(){
   const t=state.designerTemplate;if(!t)return;
   t.name=$('designerName').value.trim()||'Plantilla sin nombre'; t.id=safeDesignerId($('designerId').value); $('designerId').value=t.id;
   t.category=$('designerCategory').value.trim()||'custom'; t.width_mm=Math.max(1,Number($('designerWidth').value)||1); t.height_mm=Math.max(1,Number($('designerHeight').value)||1); t.quality_profile=$('designerQuality').value||t.quality_profile;
-  t.metadata=t.metadata||{}; t.metadata.primary_identity_field=$('designerPrimaryField').value||designerFields()[0]||'';
+  t.metadata=t.metadata||{}; t.metadata.primary_identity_field=$('designerPrimaryField').value||designerFields()[0]||''; t.marking_mode=readMarkingControls('designer');
 }
 /** WHY: Abre una plantilla en el estudio visual como copia editable y prepara todos los paneles. */
 function loadDesignerFromTemplate(template){
   state.designerTemplate=deepClone(template); state.designerSelected=-1;
-  const t=state.designerTemplate; t.metadata=t.metadata||{}; t.expected_fields=t.expected_fields||[]; t.input_rules=t.input_rules||[]; t.elements=t.elements||[];
+  const t=state.designerTemplate; t.metadata=t.metadata||{}; t.expected_fields=t.expected_fields||[]; t.input_rules=t.input_rules||[]; t.elements=t.elements||[]; t.marking_mode=t.marking_mode||defaultMarkingMode(); fillMarkingControls('designer',t);
   $('designerName').value=t.name||''; $('designerId').value=t.id||''; $('designerCategory').value=t.category||'custom'; $('designerWidth').value=t.width_mm; $('designerHeight').value=t.height_mm; $('designerQuality').value=t.quality_profile;
   renderDesignerFields(); renderDesignerCanvas(); renderDesignerProperties(); updateDesignerJson(); scheduleDesignerPreview();
 }
@@ -256,42 +678,88 @@ function designerElementSize(el){
   if(el.kind==='text')return {w:el.width_mm||20,h:Math.max(el.font_size_mm||4,3)};
   if(['qr','datamatrix'].includes(el.kind)){const m=el.module_mm||.5;return {w:el.width_mm||Math.max(12,29*m),h:el.height_mm||Math.max(12,29*m)};}
   if(['code128','code39'].includes(el.kind))return {w:el.width_mm||35,h:el.height_mm||10};
+  if(el.kind==='image')return {w:el.width_mm||20,h:el.height_mm||20};
   return {w:el.width_mm||12,h:el.height_mm||4};
 }
 /** WHY: Representa cada objeto de forma reconocible en el canvas incluso antes del render SVG real. */
 function designerObjectLabel(el,index){
   const field=el.source||''; const lit=el.literal;
   if(el.kind==='text')return lit!=null?esc(lit):esc(field||'texto');
-  if(el.kind==='qr')return `<span class="fake-qr">▦</span><small>${esc(field||'QR')}</small>`;
-  if(el.kind==='datamatrix')return `<span class="fake-qr">▩</span><small>${esc(field||'DM')}</small>`;
-  if(['code128','code39'].includes(el.kind))return `<span class="fake-bars"></span><small>${esc(field||el.kind)}</small>`;
+  if(el.kind==='qr')return `<span class="fake-qr">▦</span><small>${esc(field||'QR')}${el.engraving_mode==='negative_background'?' · NEG':''}</small>`;
+  if(el.kind==='datamatrix')return `<span class="fake-qr">▩</span><small>${esc(field||'DM')}${el.engraving_mode==='negative_background'?' · NEG':''}</small>`;
+  if(['code128','code39'].includes(el.kind))return `<span class="fake-bars"></span><small>${esc(field||el.kind)}${el.engraving_mode==='negative_background'?' · NEG':''}</small>`;
+  if(el.kind==='image')return `<span class="fake-image">▧</span><small>${esc(el.image_source_name||'imagen')}</small>`;
   if(el.kind==='rect')return '<small>rectángulo</small>'; if(el.kind==='line')return '<small>línea</small>'; return `<small>${index+1}</small>`;
 }
 /** WHY: Redibuja el lienzo interactivo a escala manteniendo posiciones en milímetros. */
 function renderDesignerCanvas(){
   const t=state.designerTemplate;if(!t)return; syncDesignerHeaderToDraft(); const maxW=650,maxH=420; state.designerScale=Math.max(.25,Math.min(12,maxW/t.width_mm,maxH/t.height_mm)); const sc=state.designerScale;
   const c=$('designerCanvas');c.style.width=`${t.width_mm*sc}px`;c.style.height=`${t.height_mm*sc}px`;c.innerHTML=''; $('designerSizeLabel').textContent=`${t.width_mm} × ${t.height_mm} mm · ${sc.toFixed(2)} px/mm`;
-  t.elements.forEach((el,index)=>{const size=designerElementSize(el);const d=document.createElement('div');d.className='design-object kind-'+el.kind+(index===state.designerSelected?' selected':'');d.dataset.index=index;const top=(el.kind==='text'?Math.max(0,el.y_mm-(el.font_size_mm||4)):el.y_mm);d.style.left=`${el.x_mm*sc}px`;d.style.top=`${top*sc}px`;d.style.width=`${Math.max(6,size.w*sc)}px`;d.style.height=`${Math.max(6,size.h*sc)}px`;d.innerHTML=designerObjectLabel(el,index);d.title=`${el.label||el.kind} · X ${el.x_mm.toFixed(1)} · Y ${el.y_mm.toFixed(1)} mm`; d.addEventListener('pointerdown',beginDesignerDrag); d.addEventListener('click',ev=>{ev.stopPropagation();state.designerSelected=index;renderDesignerCanvas();renderDesignerProperties();});c.appendChild(d);});
-  c.onclick=()=>{state.designerSelected=-1;renderDesignerCanvas();renderDesignerProperties();}; renderDesignerLayerList(); updateDesignerJson();
+  t.elements.forEach((el,index)=>{const size=designerElementSize(el);const d=document.createElement('div');
+    const inSel=state.designerSelection.includes(index);
+    d.className='design-object kind-'+el.kind+(index===state.designerSelected?' selected':'')+(inSel?' multi':'')+(state.mappingFocus&&el.source===state.mappingFocus?' mapping-hit':'');
+    d.dataset.index=index;const top=(el.kind==='text'?Math.max(0,el.y_mm-(el.font_size_mm||4)):el.y_mm);
+    d.style.left=`${el.x_mm*sc}px`;d.style.top=`${top*sc}px`;d.style.width=`${Math.max(6,size.w*sc)}px`;d.style.height=`${Math.max(6,size.h*sc)}px`;
+    // WHY: La rotación se previsualiza en el lienzo con el mismo centro que usa el
+    // backend, para que lo que el usuario gira aquí coincida con el SVG real.
+    if(el.rotation_deg) d.style.transform=`rotate(${el.rotation_deg}deg)`;
+    d.innerHTML=designerObjectLabel(el,index);d.title=`${el.label||el.kind} · X ${el.x_mm.toFixed(1)} · Y ${el.y_mm.toFixed(1)} mm${el.rotation_deg?` · ${el.rotation_deg}°`:''}`;
+    d.addEventListener('pointerdown',beginDesignerDrag);
+    d.addEventListener('click',ev=>{ev.stopPropagation();toggleDesignerSelection(index,ev.ctrlKey||ev.metaKey||ev.shiftKey);renderDesignerCanvas();renderDesignerProperties();});
+    c.appendChild(d);});
+  c.onclick=()=>{setDesignerSelection([],-1);renderDesignerCanvas();renderDesignerProperties();}; renderDesignerLayerList(); updateDesignerJson(); updateSelectionInfo(); updateHistoryButtons();
 }
 /** WHY: Convierte movimiento del puntero a milímetros y limita el objeto a la superficie de la plantilla. */
 function beginDesignerDrag(ev){
-  ev.preventDefault();ev.stopPropagation(); const node=ev.currentTarget;const index=Number(node.dataset.index);state.designerSelected=index;renderDesignerProperties();const t=state.designerTemplate,el=t.elements[index],sc=state.designerScale;const sx=ev.clientX,sy=ev.clientY,startX=el.x_mm,startY=el.y_mm;node.setPointerCapture?.(ev.pointerId);node.classList.add('dragging');
-  const move=e=>{const dx=(e.clientX-sx)/sc,dy=(e.clientY-sy)/sc;const size=designerElementSize(el);el.x_mm=Math.max(0,Math.min(t.width_mm-Math.min(size.w,t.width_mm),startX+dx));const minY=el.kind==='text'?(el.font_size_mm||4):0;el.y_mm=Math.max(minY,Math.min(t.height_mm,startY+dy));renderDesignerCanvas();renderDesignerProperties();scheduleDesignerPreview();};
-  const up=()=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',up);updateDesignerJson();};document.addEventListener('pointermove',move);document.addEventListener('pointerup',up,{once:true});
+  ev.preventDefault();ev.stopPropagation(); const node=ev.currentTarget;const index=Number(node.dataset.index);
+  if(!state.designerSelection.includes(index)) toggleDesignerSelection(index,ev.ctrlKey||ev.metaKey||ev.shiftKey);
+  else state.designerSelected=index;
+  renderDesignerProperties();
+  const t=state.designerTemplate,el=t.elements[index],sc=state.designerScale;
+  // WHY: Una sola entrada de historial por arrastre. Se registra al tomar el objeto,
+  // antes de mover nada, para que deshacer devuelva la posición original exacta.
+  pushHistory('drag:'+index+':'+Date.now());
+  const moving=(state.designerSelection.length>1?state.designerSelection:[index]);
+  const origins=moving.map(i=>({i,el:t.elements[i],b:designerBounds(t.elements[i])}));
+  const sx=ev.clientX,sy=ev.clientY;node.setPointerCapture?.(ev.pointerId);node.classList.add('dragging');
+  const move=e=>{
+    const dx=(e.clientX-sx)/sc,dy=(e.clientY-sy)/sc;
+    const lead=origins.find(o=>o.i===index);
+    // El imantado se calcula sobre el objeto tomado y el mismo delta se aplica al
+    // resto de la selección, para no deformar la composición ya construida.
+    const sx1=applySnap('x',lead.b.x+dx,lead.b.w,moving);
+    const sy1=applySnap('y',lead.b.y+dy,lead.b.h,moving);
+    const adx=sx1.value-lead.b.x, ady=sy1.value-lead.b.y;
+    for(const o of origins){
+      const nx=Math.max(0,Math.min(t.width_mm-Math.min(o.b.w,t.width_mm),o.b.x+adx));
+      const ny=Math.max(0,Math.min(t.height_mm,o.b.y+ady));
+      setDesignerBounds(o.el,nx,ny);
+    }
+    renderDesignerCanvas();renderSnapGuides([sx1.guide,sy1.guide]);renderDesignerProperties();scheduleDesignerPreview();
+  };
+  const up=()=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',up);renderSnapGuides([]);updateDesignerJson();};
+  document.addEventListener('pointermove',move);document.addEventListener('pointerup',up,{once:true});
 }
 /** WHY: Ofrece una lista de capas alternativa al canvas; facilita seleccionar objetos pequeños, solapados o difíciles de clicar. */
 function renderDesignerLayerList(){
   const host=$('designerLayerList'); if(!host)return; const items=state.designerTemplate?.elements||[];
-  host.innerHTML=items.length?items.map((el,i)=>`<button class="layer-item ${i===state.designerSelected?'active':''}" data-layer-index="${i}"><span>${i+1}</span><strong>${esc(el.label||el.kind)}</strong><small>${esc(el.kind)}</small></button>`).join(''):'<span class="muted">Aún no hay elementos.</span>';
-  host.querySelectorAll('[data-layer-index]').forEach(b=>b.addEventListener('click',()=>{state.designerSelected=Number(b.dataset.layerIndex);renderDesignerCanvas();renderDesignerProperties();}));
+  host.innerHTML=items.length?items.map((el,i)=>`<button class="layer-item ${i===state.designerSelected?'active':''} ${state.designerSelection.includes(i)?'in-selection':''} ${state.mappingFocus&&el.source===state.mappingFocus?'mapping-hit':''}" data-layer-index="${i}"><span>${i+1}</span><strong>${esc(el.label||el.kind)}</strong><small>${esc(el.kind)}${el.rotation_deg?` · ${el.rotation_deg}°`:''}</small></button>`).join(''):'<span class="muted">Aún no hay elementos.</span>';
+  host.querySelectorAll('[data-layer-index]').forEach(b=>b.addEventListener('click',ev=>{toggleDesignerSelection(Number(b.dataset.layerIndex),ev.ctrlKey||ev.metaKey||ev.shiftKey);renderDesignerCanvas();renderDesignerProperties();}));
 }
 /** WHY: Carga el elemento seleccionado en el inspector para edición precisa además del arrastre visual. */
 function renderDesignerProperties(){
   renderDesignerLayerList();
   const t=state.designerTemplate;const el=t?.elements?.[state.designerSelected];$('designerPropertyForm').hidden=!el;$('designerNoSelection').hidden=!!el;$('designerSelectionLabel').textContent=el?(el.label||`elemento ${state.designerSelected+1}`):'sin selección';if(!el)return;
   const fields=designerFields();$('propSource').innerHTML='<option value="">— sin campo / texto fijo —</option>'+fields.map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join('');
-  $('propLabel').value=el.label||'';$('propKind').value=el.kind;$('propSource').value=el.source||'';$('propLiteral').value=el.literal??'';$('propX').value=el.x_mm;$('propY').value=el.y_mm;$('propWidth').value=el.width_mm??'';$('propHeight').value=el.height_mm??'';$('propFont').value=el.font_size_mm??4;$('propModule').value=el.module_mm??'';$('propAlign').value=el.align||'center';$('propEc').value=el.error_correction||'M';
+  $('propLabel').value=el.label||'';$('propKind').value=el.kind;$('propSource').value=el.source||'';$('propLiteral').value=el.literal??'';$('propX').value=el.x_mm;$('propY').value=el.y_mm;$('propWidth').value=el.width_mm??'';$('propHeight').value=el.height_mm??'';$('propFont').value=el.font_size_mm??4;$('propModule').value=el.module_mm??'';$('propAlign').value=el.align||'center';$('propEc').value=el.error_correction||'M';$('propRotation').value=el.rotation_deg??0;$('propQuiet').value=el.quiet_modules??'';$('propEngravingMode').value=el.engraving_mode||'positive';
+  if($('imagePropertyGroup')){
+    $('imagePropertyGroup').hidden=el.kind!=='image';
+    $('propImageProcessing').value=el.image_processing||'auto';
+    $('propImageThreshold').value=el.image_threshold??128;
+    $('propImageDpi').value=el.image_dpi??254;
+    $('propImageAspect').checked=el.image_preserve_aspect!==false;
+    $('propImageSource').textContent=el.kind==='image'?(el.image_source_name||'imagen embebida'):'';
+  }
   applyDesignerPropertyAvailability(el);
 }
 /** WHY: Deshabilita propiedades que no aplican al tipo de elemento y evita configuraciones incoherentes. */
@@ -307,6 +775,12 @@ function applyDesignerPropertyAvailability(el){
   $('propModule').disabled=!(barcodeKinds.includes(el.kind)||matrixKinds.includes(el.kind));
   $('propAlign').disabled=!(el.kind==='text'||barcodeKinds.includes(el.kind));
   $('propEc').disabled=el.kind!=='qr';
+  const codeKinds=[...barcodeKinds,...matrixKinds];
+  $('propQuiet').disabled=!codeKinds.includes(el.kind);
+  $('propQuiet').title=codeKinds.includes(el.kind)?'Módulos de silencio alrededor del código. Vacío hereda el perfil de calidad.':'Sólo aplica a códigos de barras y matriciales.';
+  if($('quietHint')) $('quietHint').hidden=!codeKinds.includes(el.kind);
+  $('propEngravingMode').disabled=!codeKinds.includes(el.kind);
+  if($('engravingModeHint')) $('engravingModeHint').hidden=!codeKinds.includes(el.kind);
   $('propWidth').title=matrixKinds.includes(el.kind)?'El tamaño de QR/Data Matrix depende del contenido y del módulo (mm).':'';
   $('propHeight').title=$('propWidth').title;
   $('propModule').title=(barcodeKinds.includes(el.kind)||matrixKinds.includes(el.kind))?'Tamaño físico del módulo; use valores aprobados por el perfil de calidad o por pruebas reales.':'';
@@ -314,7 +788,7 @@ function applyDesignerPropertyAvailability(el){
 /** WHY: Crea un elemento genérico con valores iniciales seguros y opcionalmente lo coloca donde se soltó. */
 function addDesignerElement(kind,role='variable',dropX=null,dropY=null){
   const t=state.designerTemplate;if(!t)return; if(!designerFields().length&&['text','code128','code39','qr','datamatrix'].includes(kind)){t.expected_fields=['value'];t.metadata.primary_identity_field='value';renderDesignerFields();}
-  const f=designerFields()[0]||'value';let el={kind,x_mm:2,y_mm:2,source:f,literal:null,width_mm:null,height_mm:null,font_size_mm:4,align:'center',module_mm:null,error_correction:'M',stroke_mm:.25,label:kind};
+  const f=designerFields()[0]||'value';let el={kind,x_mm:2,y_mm:2,source:f,literal:null,width_mm:null,height_mm:null,font_size_mm:4,align:'center',module_mm:null,error_correction:'M',stroke_mm:.25,label:kind,engraving_mode:'positive'};
   if(kind==='text'){el.y_mm=8;el.width_mm=Math.min(30,Math.max(5,t.width_mm-4));el.label=role==='literal'?'Texto fijo':'Texto / serie';if(role==='literal'){el.source=null;el.literal='TEXTO';}}
   if(kind==='code128'||kind==='code39'){el.width_mm=Math.min(45,Math.max(10,t.width_mm-4));el.height_mm=Math.min(10,Math.max(4,t.height_mm-8));el.label=kind==='code128'?'Code 128':'Code 39';}
   if(kind==='qr'||kind==='datamatrix'){el.module_mm=.5;el.label=kind==='qr'?'QR':'Data Matrix';}
@@ -324,14 +798,52 @@ function addDesignerElement(kind,role='variable',dropX=null,dropY=null){
     const size=designerElementSize(el); el.x_mm=Math.max(0,Math.min(t.width_mm-Math.min(size.w,t.width_mm),dropX));
     el.y_mm=el.kind==='text'?Math.max(el.font_size_mm||4,Math.min(t.height_mm,dropY+(el.font_size_mm||4))):Math.max(0,Math.min(t.height_mm-Math.min(size.h,t.height_mm),dropY));
   }
-  t.elements.push(el);state.designerSelected=t.elements.length-1;renderDesignerCanvas();renderDesignerProperties();scheduleDesignerPreview();
+  pushHistory('add:'+Date.now());
+  t.elements.push(el);setDesignerSelection([t.elements.length-1],t.elements.length-1);renderDesignerCanvas();renderDesignerProperties();scheduleDesignerPreview();
+}
+/** WHY: Convierte un archivo local en un elemento imagen embebido sin depender de rutas del PC del operador. */
+function addOrReplaceDesignerImage(file,replaceIndex=null){
+  if(!file)return; const max=3*1024*1024;
+  if(file.size>max){msg($('designerWarnings'),'La imagen supera 3 MB; reduzca el archivo antes de integrarlo.','bad');return;}
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  const mime=ext==='svg'?'image/svg+xml':(['jpg','jpeg'].includes(ext)?'image/jpeg':'image/png');
+  if(!['png','jpg','jpeg','svg'].includes(ext)){msg($('designerWarnings'),'Formato no soportado. Use PNG, JPG/JPEG o SVG.','bad');return;}
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const raw=String(reader.result||''); const payload=raw.includes(',')?raw.split(',',2)[1]:'';
+    if(!payload){msg($('designerWarnings'),'No se pudo leer la imagen.','bad');return;}
+    const uri=`data:${mime};base64,${payload}`; const t=state.designerTemplate;if(!t)return;
+    pushHistory('image:'+Date.now());
+    if(replaceIndex!=null&&t.elements[replaceIndex]?.kind==='image'){
+      const el=t.elements[replaceIndex];el.image_data_uri=uri;el.image_source_name=file.name;el.image_processing=ext==='svg'?'vector':'threshold';
+      setDesignerSelection([replaceIndex],replaceIndex);
+    }else{
+      const w=Math.min(20,Math.max(5,t.width_mm-4)),h=Math.min(20,Math.max(5,t.height_mm-4));
+      const el={kind:'image',x_mm:2,y_mm:2,source:null,literal:null,width_mm:w,height_mm:h,font_size_mm:4,align:'center',module_mm:null,error_correction:'M',stroke_mm:.25,label:'Imagen / logo',engraving_mode:'positive',rotation_deg:0,quiet_modules:null,image_data_uri:uri,image_processing:ext==='svg'?'vector':'threshold',image_threshold:128,image_dpi:254,image_preserve_aspect:true,image_source_name:file.name};
+      t.elements.push(el);setDesignerSelection([t.elements.length-1],t.elements.length-1);
+    }
+    renderDesignerCanvas();renderDesignerProperties();scheduleDesignerPreview();
+  };
+  reader.readAsDataURL(file);
 }
 /** WHY: Devuelve la selección actual como único punto de acceso para acciones de propiedades. */
 function selectedDesignerElement(){return state.designerTemplate?.elements?.[state.designerSelected]||null;}
 /** WHY: Aplica cambios del inspector al borrador y refresca canvas/preview en tiempo real. */
 function updateSelectedElementFromProperties(){
-  const el=selectedDesignerElement();if(!el)return;el.label=$('propLabel').value.trim()||el.kind;el.x_mm=Math.max(0,Number($('propX').value)||0);el.y_mm=Math.max(0,Number($('propY').value)||0);el.width_mm=$('propWidth').value?Math.max(.1,Number($('propWidth').value)):null;el.height_mm=$('propHeight').value?Math.max(.1,Number($('propHeight').value)):null;el.font_size_mm=Math.max(.1,Number($('propFont').value)||4);el.module_mm=$('propModule').value?Math.max(.01,Number($('propModule').value)):null;el.align=$('propAlign').value;el.error_correction=$('propEc').value;
-  const source=$('propSource').value,lit=$('propLiteral').value;if(lit.trim()){el.literal=lit;el.source=null;}else{el.literal=null;el.source=source||null;}
+  const el=selectedDesignerElement();if(!el)return;
+  pushHistory('prop:'+state.designerSelected);
+  el.label=$('propLabel').value.trim()||el.kind;el.x_mm=Math.max(0,Number($('propX').value)||0);el.y_mm=Math.max(0,Number($('propY').value)||0);el.width_mm=$('propWidth').value?Math.max(.1,Number($('propWidth').value)):null;el.height_mm=$('propHeight').value?Math.max(.1,Number($('propHeight').value)):null;el.font_size_mm=Math.max(.1,Number($('propFont').value)||4);el.module_mm=$('propModule').value?Math.max(.01,Number($('propModule').value)):null;el.align=$('propAlign').value;el.error_correction=$('propEc').value;
+  el.rotation_deg=((Number($('propRotation').value)||0)%360+360)%360;
+  // WHY: Vacío significa "heredar el perfil", que es distinto de 0. Un 0 explícito es
+  // una decisión del usuario y debe conservarse para que el preflight lo advierta.
+  el.quiet_modules=$('propQuiet').value===''?null:Math.max(0,Math.min(64,Number($('propQuiet').value)||0));
+  el.engraving_mode=['code128','code39','qr','datamatrix'].includes(el.kind)?($('propEngravingMode').value||'positive'):'positive';
+  if(el.kind==='image'){
+    el.source=null;el.literal=null;el.image_processing=$('propImageProcessing').value||'auto';
+    el.image_threshold=Math.max(0,Math.min(255,Number($('propImageThreshold').value)||128));
+    el.image_dpi=Math.max(50,Math.min(1200,Number($('propImageDpi').value)||254));
+    el.image_preserve_aspect=$('propImageAspect').checked;
+  }else{const source=$('propSource').value,lit=$('propLiteral').value;if(lit.trim()){el.literal=lit;el.source=null;}else{el.literal=null;el.source=source||null;}}
   renderDesignerCanvas();scheduleDesignerPreview();
 }
 /** WHY: Recoge datos de ejemplo usados sólo para visualizar el resultado real de la plantilla. */
@@ -363,20 +875,43 @@ function initVisualDesigner(){
   });
   $('designerCanvas').addEventListener('dragover',e=>{if(e.dataTransfer.types.includes('application/x-marking-element')){e.preventDefault();e.dataTransfer.dropEffect='copy';}});
   $('designerCanvas').addEventListener('drop',e=>{e.preventDefault();let payload;try{payload=JSON.parse(e.dataTransfer.getData('application/x-marking-element'));}catch{return;}if(!payload?.kind)return;const rect=$('designerCanvas').getBoundingClientRect();const x=(e.clientX-rect.left)/state.designerScale;const y=(e.clientY-rect.top)/state.designerScale;addDesignerElement(payload.kind,payload.role||'variable',x,y);});
+  $('addImageElementBtn')?.addEventListener('click',()=>{state.pendingImageReplaceIndex=null;$('designerImageInput').value='';$('designerImageInput').click();});
+  $('replaceImageBtn')?.addEventListener('click',()=>{const el=selectedDesignerElement();if(!el||el.kind!=='image')return;state.pendingImageReplaceIndex=state.designerSelected;$('designerImageInput').value='';$('designerImageInput').click();});
+  $('designerImageInput')?.addEventListener('change',()=>{const file=$('designerImageInput').files?.[0];addOrReplaceDesignerImage(file,state.pendingImageReplaceIndex);state.pendingImageReplaceIndex=null;});
   $('newTemplateBtn').addEventListener('click',()=>loadDesignerFromTemplate(blankDesignerTemplate()));
   $('duplicateTemplateBtn').addEventListener('click',()=>{const t=deepClone(state.designerTemplate||blankDesignerTemplate());t.id=`${safeDesignerId(t.id)}_copy_${Date.now().toString().slice(-5)}`;t.name=`${t.name} — copia`;loadDesignerFromTemplate(t);});
   $('saveVisualTemplateBtn').addEventListener('click',saveVisualTemplate);
-  $('designerQualityBtn').addEventListener('click',()=>{syncDesignerHeaderToDraft();runCodeQuality(state.designerTemplate,designerData(),$('designerScanner').value,'designerQualityResult');});
+  $('designerQualityBtn').addEventListener('click',()=>{syncDesignerHeaderToDraft();runCodeQuality(state.designerTemplate,designerData(),$('designerScanner').value,'designerQualityResult',readMarkingControls('designer'));});
   ['designerName','designerId','designerCategory','designerWidth','designerHeight','designerQuality'].forEach(id=>$(id).addEventListener('input',()=>{syncDesignerHeaderToDraft();renderDesignerCanvas();scheduleDesignerPreview();}));
   $('designerPrimaryField').addEventListener('change',()=>{syncDesignerHeaderToDraft();updateDesignerJson();});
   $('designerAddFieldBtn').addEventListener('click',()=>{const f=safeDesignerId($('designerNewField').value).replace(/-/g,'_');if(!f)return;if(!state.designerTemplate.expected_fields.includes(f))state.designerTemplate.expected_fields.push(f);state.designerTemplate.metadata.example_data=state.designerTemplate.metadata.example_data||{};state.designerTemplate.metadata.example_data[f]='';$('designerNewField').value='';renderDesignerFields();renderDesignerProperties();updateDesignerJson();scheduleDesignerPreview();});
   $('designerNewField').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('designerAddFieldBtn').click();}});
-  ['propLabel','propX','propY','propWidth','propHeight','propFont','propModule'].forEach(id=>$(id).addEventListener('input',updateSelectedElementFromProperties));
-  ['propAlign','propEc'].forEach(id=>$(id).addEventListener('change',updateSelectedElementFromProperties));
+  ['propLabel','propX','propY','propWidth','propHeight','propFont','propModule','propRotation','propQuiet','propImageThreshold','propImageDpi'].forEach(id=>$(id).addEventListener('input',updateSelectedElementFromProperties));
+  document.querySelectorAll('[data-rotate]').forEach(b=>b.addEventListener('click',()=>{
+    const el=selectedDesignerElement(); if(!el)return;
+    pushHistory('rotate:'+state.designerSelected+':'+Date.now());
+    el.rotation_deg=Number(b.dataset.rotate)||0;
+    $('propRotation').value=el.rotation_deg;
+    renderDesignerCanvas();renderDesignerProperties();scheduleDesignerPreview();
+  }));
+  if($('undoBtn')) $('undoBtn').addEventListener('click',undoDesigner);
+  if($('redoBtn')) $('redoBtn').addEventListener('click',redoDesigner);
+  document.querySelectorAll('#alignGroup button[data-align]').forEach(b=>b.addEventListener('click',()=>alignDesignerSelection(b.dataset.align)));
+  // WHY: Los atajos sólo actúan con la pestaña de diseño activa; capturarlos de forma
+  // global haría que Ctrl+Z deshiciera cambios del diseñador mientras el usuario
+  // escribe en otra pantalla.
+  document.addEventListener('keydown',e=>{
+    if(!$('tab-config')||!$('tab-config').classList.contains('active'))return;
+    const z=(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z';
+    const y=(e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y';
+    if(z&&!e.shiftKey){e.preventDefault();undoDesigner();}
+    else if((z&&e.shiftKey)||y){e.preventDefault();redoDesigner();}
+  });
+  ['propAlign','propEc','propEngravingMode','propImageProcessing','propImageAspect'].forEach(id=>$(id).addEventListener('change',updateSelectedElementFromProperties));
   $('propSource').addEventListener('change',()=>{$('propLiteral').value='';updateSelectedElementFromProperties();}); $('propLiteral').addEventListener('input',updateSelectedElementFromProperties);
-  $('deleteElementBtn').addEventListener('click',()=>{if(state.designerSelected<0)return;state.designerTemplate.elements.splice(state.designerSelected,1);state.designerSelected=-1;renderDesignerCanvas();renderDesignerProperties();scheduleDesignerPreview();});
-  $('duplicateElementBtn').addEventListener('click',()=>{const el=selectedDesignerElement();if(!el)return;const c=deepClone(el);c.x_mm=Math.min(state.designerTemplate.width_mm,c.x_mm+2);c.y_mm=Math.min(state.designerTemplate.height_mm,c.y_mm+2);state.designerTemplate.elements.push(c);state.designerSelected=state.designerTemplate.elements.length-1;renderDesignerCanvas();renderDesignerProperties();scheduleDesignerPreview();});
-  document.addEventListener('keydown',e=>{if(!state.designerTemplate||state.designerSelected<0||!$('tab-config').classList.contains('active'))return;const el=selectedDesignerElement();if(!el)return;const step=e.shiftKey?1:.2;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();if(e.key==='ArrowLeft')el.x_mm=Math.max(0,el.x_mm-step);if(e.key==='ArrowRight')el.x_mm+=step;if(e.key==='ArrowUp')el.y_mm=Math.max(0,el.y_mm-step);if(e.key==='ArrowDown')el.y_mm+=step;renderDesignerCanvas();renderDesignerProperties();scheduleDesignerPreview();}});
+  $('deleteElementBtn').addEventListener('click',()=>{if(!state.designerSelection.length)return;pushHistory('delete:'+Date.now());const keep=new Set(state.designerSelection);state.designerTemplate.elements=state.designerTemplate.elements.filter((_,i)=>!keep.has(i));setDesignerSelection([],-1);renderDesignerCanvas();renderDesignerProperties();scheduleDesignerPreview();});
+  $('duplicateElementBtn').addEventListener('click',()=>{const el=selectedDesignerElement();if(!el)return;pushHistory('duplicate:'+Date.now());const c=deepClone(el);c.x_mm=Math.min(state.designerTemplate.width_mm,c.x_mm+2);c.y_mm=Math.min(state.designerTemplate.height_mm,c.y_mm+2);state.designerTemplate.elements.push(c);setDesignerSelection([state.designerTemplate.elements.length-1],state.designerTemplate.elements.length-1);renderDesignerCanvas();renderDesignerProperties();scheduleDesignerPreview();});
+  document.addEventListener('keydown',e=>{if(!state.designerTemplate||state.designerSelected<0||!$('tab-config').classList.contains('active'))return;const el=selectedDesignerElement();if(!el)return;const step=e.shiftKey?1:.2;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){e.preventDefault();pushHistory('nudge:'+state.designerSelected);if(e.key==='ArrowLeft')el.x_mm=Math.max(0,el.x_mm-step);if(e.key==='ArrowRight')el.x_mm+=step;if(e.key==='ArrowUp')el.y_mm=Math.max(0,el.y_mm-step);if(e.key==='ArrowDown')el.y_mm+=step;renderDesignerCanvas();renderDesignerProperties();scheduleDesignerPreview();}});
 }
 $('configTemplate').addEventListener('change',loadConfigEditors); $('configJig').addEventListener('change',loadConfigEditors); $('ruleField').addEventListener('change',loadInputRuleForm);
 $('saveInputRuleBtn').addEventListener('click',()=>{clear($('inputRuleMsg'));const t=state.designerTemplate,field=$('ruleField').value;if(!t||!field){msg($('inputRuleMsg'),'Agregue/seleccione un campo primero.','warn');return;}const rules=(t.input_rules||[]).filter(r=>r.field!==field);rules.push({field,manual_prefix_enabled:$('rulePrefixEnabled').checked,manual_prefix:$('rulePrefix').value,manual_suffix_enabled:$('ruleSuffixEnabled').checked,manual_suffix:$('ruleSuffix').value,imported_values:$('ruleImportedMode').value,uppercase:$('ruleUppercase').checked,trim:true,description:'Regla configurada desde el estudio visual.'});t.input_rules=rules;updateDesignerJson();scheduleDesignerPreview();msg($('inputRuleMsg'),'Regla aplicada al borrador. Guarde la plantilla para conservarla.','ok');});
@@ -384,7 +919,7 @@ $('saveTemplateBtn').addEventListener('click',async()=>{clear($('templateSaveMsg
 $('saveJigBtn').addEventListener('click',async()=>{clear($('jigSaveMsg'));try{const obj=JSON.parse($('jigJson').value);await api('/api/jigs/save',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jig:obj})});msg($('jigSaveMsg'),'Jig guardado. Recargue la aplicación para refrescar el catálogo.','ok');}catch(e){msg($('jigSaveMsg'),e.message,'bad');}});
 
 /** WHY: Consulta eventos recientes para auditoría sin acceder directamente al archivo SQLite. */
-async function loadHistory(){ if(!state.catalog)return; try{const j=await (await api('/api/history?limit=200')).json(); $('historyTable').innerHTML=`<table><thead><tr><th>Fecha</th><th>Activo</th><th>Plantilla</th><th>Pos.</th><th>Estado</th><th>Verificado</th></tr></thead><tbody>${j.items.map(x=>`<tr><td>${esc(x.created_at)}</td><td><strong>${esc(x.asset_key)}</strong></td><td>${esc(x.template_id)}</td><td>${x.slot_index??''}</td><td>${esc(x.status)}</td><td>${esc(x.verified_at||'')}</td></tr>`).join('')}</tbody></table>`;}catch(e){$('historyTable').textContent=e.message;}}
+async function loadHistory(){ if(!state.catalog)return; try{const j=await (await api('/api/history?limit=200')).json(); $('historyTable').innerHTML=`<table><thead><tr><th>Fecha</th><th>Activo</th><th>Plantilla</th><th>Modo</th><th>Pos.</th><th>Estado</th><th>Verificado</th></tr></thead><tbody>${j.items.map(x=>{const mm=x.job_metadata?.marking_mode;const mode=mm?.polarity==='negative'?`Invertido · ${mm.polarity_scope||'codes'} / ${mm.negative_field||'islands'}`:'Directo';return `<tr><td>${esc(x.created_at)}</td><td><strong>${esc(x.asset_key)}</strong></td><td>${esc(x.template_id)}</td><td>${esc(mode)}</td><td>${x.slot_index??''}</td><td>${esc(x.status)}</td><td>${esc(x.verified_at||'')}</td></tr>`;}).join('')}</tbody></table>`;}catch(e){$('historyTable').textContent=e.message;}}
 $('refreshHistoryBtn').addEventListener('click',loadHistory);
 
 
@@ -470,7 +1005,7 @@ async function loadMachineCaptures(){
   try{
     state.machineCaptures=await (await api('/api/machine/captures?limit=100')).json();
     const presets=state.machineCaptures.material_presets||[];
-    $('batchMaterialPreset').innerHTML='<option value="">— ninguno / definir en LightBurn —</option>'+presets.map(p=>`<option value="${p.id}">${esc(p.material||'Material')} · ${esc(p.description||p.operation||'preset')} · ${esc(p.source_name)}</option>`).join('');
+    $('batchMaterialPreset').innerHTML='<option value="">— ninguno / definir en LightBurn —</option>'+presets.map(p=>{const mm=p.settings?.marking_mode;const mode=mm?.polarity==='negative'?` · INVERTIDO/${esc(mm.polarity_scope||'codes')}/${esc(mm.negative_field||'islands')}`:' · directo';const scan=p.settings?.scan_validation&&p.settings.scan_validation!=='not_tested'?` · lectura ${esc(p.settings.scan_validation)}`:'';return `<option value="${p.id}">${esc(p.material||'Material')} · ${esc(p.description||p.operation||'preset')} · ${esc(p.source_name)}${mode}${scan}</option>`;}).join('');
     const caps=state.machineCaptures.captures||[];
     $('capturesTable').innerHTML=caps.length?`<table><thead><tr><th>Fecha</th><th>Fuente</th><th>Archivo/puerto</th><th>Máquina</th><th>SHA-256</th></tr></thead><tbody>${caps.map(c=>`<tr><td>${esc(c.created_at)}</td><td>${esc(c.source_type)}</td><td>${esc(c.source_name)}</td><td>${esc(c.machine_profile_id||'')}</td><td><code>${esc((c.sha256||'').slice(0,16))}…</code></td></tr>`).join('')}</tbody></table>`:'<span class="muted">Sin capturas todavía.</span>';
   }catch(e){console.error(e);}
@@ -508,6 +1043,16 @@ function applyExperienceMode(mode){
 $('guidedModeBtn').addEventListener('click',()=>applyExperienceMode('guided'));
 $('expertModeBtn').addEventListener('click',()=>applyExperienceMode('expert'));
 
+/** WHY: La biblioteca validada debe registrar la estrategia física completa; los detalles sólo se muestran en invertido. */
+function toggleShopPresetNegativeOptions(){
+  const neg=$('shopPresetPolarity').value==='negative'; const host=$('shopPresetNegativeOptions'); if(host)host.hidden=!neg;
+  const scope=$('shopPresetPolarityScope'), field=$('shopPresetNegativeField'); const opt=field?[...field.options].find(o=>o.value==='template'):null;
+  if(opt)opt.disabled=false;
+}
+$('shopPresetPolarity').addEventListener('change',toggleShopPresetNegativeOptions);
+$('shopPresetPolarityScope').addEventListener('change',toggleShopPresetNegativeOptions);
+toggleShopPresetNegativeOptions();
+
 $('saveShopPresetBtn').addEventListener('click',async()=>{
   clear($('shopPresetMsg'));
   const body={
@@ -518,7 +1063,9 @@ $('saveShopPresetBtn').addEventListener('click',async()=>{
     interval_mm:$('shopPresetInterval').value?Number($('shopPresetInterval').value):null,
     focus_reference_mm:$('shopPresetFocus').value?Number($('shopPresetFocus').value):null,
     laser_mode:$('shopPresetLaserMode').value,
-    validated_on_exact_machine_surface:$('shopPresetValidated').checked, notes:$('shopPresetNotes').value.trim()
+    validated_on_exact_machine_surface:$('shopPresetValidated').checked, notes:$('shopPresetNotes').value.trim(),
+    marking_mode:{polarity:$('shopPresetPolarity').value,polarity_scope:$('shopPresetPolarityScope').value,negative_field:$('shopPresetNegativeField').value,field_margin_mm:Number($('shopPresetFieldMargin').value)||0,kerf_compensation_mm:Number($('shopPresetKerf').value)||0,validated_on:$('shopPresetValidatedOn').value.trim()},
+    scanner_profile_id:$('shopPresetScanner').value||null,scan_validation:$('shopPresetScanValidation').value,scan_attempts:$('shopPresetScanAttempts').value?Number($('shopPresetScanAttempts').value):null,scan_successes:$('shopPresetScanSuccesses').value?Number($('shopPresetScanSuccesses').value):null
   };
   if(!body.name||!body.material||!body.speed_mm_min||!body.power_percent){msg($('shopPresetMsg'),'Complete nombre, material/superficie, velocidad y potencia.','warn');return;}
   try{const r=await api('/api/materials/shop-preset',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}); const j=await r.json(); msg($('shopPresetMsg'),j.status==='validated'?'Ajuste local guardado como VALIDADO para la misma máquina/superficie.':'Ajuste guardado como BORRADOR; valide físicamente antes de producción.',j.status==='validated'?'ok':'warn'); await loadMachineCaptures();}catch(e){msg($('shopPresetMsg'),e.message,'bad');}
@@ -555,5 +1102,41 @@ $('importDetectedLaserGrblBtn').addEventListener('click',async()=>{
   clear($('lasergrblDiscoveryMsg')); const idx=$('lasergrblArtifact').value; if(idx===''){msg($('lasergrblDiscoveryMsg'),'Seleccione una base detectada.','warn');return;} const item=state.lasergrblArtifacts[Number(idx)];
   try{const r=await api('/api/machine/lasergrbl/import-local',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({path:item.path,machine_profile_id:$('machineImportProfile').value||null})}); const j=await r.json(); msg($('lasergrblDiscoveryMsg'),`Importados ${j.material_preset_count} presets LaserGRBL en solo lectura.`,'ok'); await loadMachineCaptures();}catch(e){msg($('lasergrblDiscoveryMsg'),e.message,'bad');}
 });
+
+
+/** WHY: Muestra positivo vs negativo usando exactamente el mismo motor de producción. */
+async function compareIndividualMarking(){
+  const t=selectedTemplate('individualTemplate'); const data={}; $('individualFields').querySelectorAll('input').forEach(i=>data[i.dataset.field]=i.value.trim());
+  const host=$('individualMarkingCompare'); host.innerHTML='<div class="msg">Generando comparación…</div>';
+  try{
+    const r=await api('/api/marking/compare',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template:t,data,capture_mode:'manual',negative_mode:{...readMarkingControls('individual'),polarity:'negative'}})});
+    const j=await r.json(); host.innerHTML=`<article><strong>POSITIVO · referencia de lectura</strong><div class="preview">${j.positive_svg}</div></article><article><strong>NEGATIVO · instrucción de ablación</strong><div class="preview">${j.negative_svg}</div><small>${j.estimated_negative_ablation_ratio!=null?`Ablación estimada ~${Math.round(j.estimated_negative_ablation_ratio*100)}% del lienzo`:''}</small></article>`;
+  }catch(e){host.innerHTML='';msg(host,e.message,'bad');}
+}
+
+bindMarkingControls('individual',scheduleIndividualPreview);
+bindMarkingControls('batch',()=>{renderBatchRecordPreview?.();});
+bindMarkingControls('designer',()=>{if(state.designerTemplate){state.designerTemplate.marking_mode=readMarkingControls('designer');updateDesignerJson();scheduleDesignerPreview();}});
+/** WHY: El cupón usa una sola identidad en cuatro estrategias para que la prueba física compare sólo el modo de marcado. */
+async function downloadMarkingCoupon(){
+  const t=selectedTemplate('individualTemplate');const data={};$('individualFields').querySelectorAll('input').forEach(i=>data[i.dataset.field]=i.value.trim());
+  try{const r=await api('/api/marking/coupon',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template:t,data,capture_mode:'manual',negative_mode:{...readMarkingControls('individual'),polarity:'negative'}})});const j=await r.json();downloadBlob(new Blob([j.svg],{type:'image/svg+xml'}),`${t.id}-CHARACTERIZATION_COUPON.svg`);msg($('renderWarnings'),'Cupón experimental generado. Grábelo sólo sobre una pieza de descarte y registre cuál panel lee mejor.','warn');}
+  catch(e){msg($('renderWarnings'),e.message,'bad');}
+}
+$('individualCompareMarkingBtn')?.addEventListener('click',compareIndividualMarking);
+$('individualCouponBtn')?.addEventListener('click',downloadMarkingCoupon);
+$('designerCompareMarkingBtn')?.addEventListener('click',async()=>{
+  if(!state.designerTemplate)return; syncDesignerHeaderToDraft();
+  const host=$('designerWarnings'), compare=$('designerMarkingCompare');
+  if(compare)compare.innerHTML='<div class="msg">Generando comparación…</div>';
+  try{
+    const r=await api('/api/marking/compare',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template:state.designerTemplate,data:designerData(),negative_mode:{...readMarkingControls('designer'),polarity:'negative'}})});
+    const j=await r.json();
+    if(compare)compare.innerHTML=`<article><strong>POSITIVO · referencia de lectura</strong><div class="preview">${j.positive_svg}</div></article><article><strong>NEGATIVO · instrucción de ablación</strong><div class="preview">${j.negative_svg}</div><small>${j.estimated_negative_ablation_ratio!=null?`Ablación estimada ~${Math.round(j.estimated_negative_ablation_ratio*100)}% del lienzo`:''}</small></article>`;
+    msg(host,`Comparación generada. Ablación negativa estimada: ${j.estimated_negative_ablation_mm2??'—'} mm².`,'ok');
+  }catch(e){if(compare)compare.innerHTML='';msg(host,e.message,'bad');}
+});
+$('individualSaveMarkingBtn')?.addEventListener('click',()=>saveMarkingModeToTemplate('individualTemplate','individual','renderWarnings'));
+$('batchSaveMarkingBtn')?.addEventListener('click',()=>saveMarkingModeToTemplate('batchTemplate','batch','batchMessages'));
 
 loadAll().catch(e=>{ $('licenseBadge').textContent='Error de inicio'; $('licenseBadge').className='badge bad'; console.error(e); });

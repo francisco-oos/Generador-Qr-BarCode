@@ -63,3 +63,16 @@ Esto no demuestra que esos otros símbolos sean inválidos: la fotografía intro
 ## Límite explícito
 
 El preflight no es un verificador ISO/IEC y no mide contraste del futuro grabado. Su función es encontrar problemas evitables temprano y documentar por qué una geometría se considera segura o frágil.
+
+
+## Polaridad / relieve — v0.8.0
+
+El preflight **siempre evalúa la geometría positiva canónica** aunque la salida solicitada sea negativa. Esto es un invariante de seguridad: el SVG negativo describe qué retirará el láser; no es el símbolo que se espera escanear directamente.
+
+Cuando el trabajo es negativo, el resultado de calidad incluye la polaridad solicitada y `physical_validation_required=true`. Existe además una guardia que hace fallar la ruta de preflight si accidentalmente recibe un path `even-odd` de geometría negativa. Así se evita un falso PASS sobre un artefacto de ablación.
+
+No se presupone que el Steren COM-597 decodifique polaridad óptica inversa. El flujo busca terminar con barras/módulos oscuros sobre fondo suficientemente claro mediante la respuesta del material o un acabado (marcador/pintura).
+
+`kerf_compensation_mm` no mejora la calificación digital ni se inventa automáticamente. Compensa geometría física medida y debe comenzar en `0`. El preflight sigue calificando módulo, quiet zone y dato del símbolo positivo.
+
+La aceptación física mínima para un estándar local es: mismo material/superficie + misma máquina/preset + acabado definido + 5 lecturas correctas repetidas con el lector real. Guarde esa evidencia en Materiales/Presets; una simulación digital no la reemplaza.

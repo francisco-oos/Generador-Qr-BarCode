@@ -13,8 +13,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Iterable
 
-from .models import BatchAssignment, JigProfile, MachineProfile, QualityProfile, TemplateSpec
-from .template_engine import apply_input_rules, render_template
+from .models import BatchAssignment, JigProfile, MachineProfile, QualityProfile, TemplateSpec, MarkingMode
+from .svg_document import IdRegistry, SvgDocumentBuilder, element_group, build_batch_document
+from .template_engine import GENERATOR_NAME, GENERATOR_VERSION, apply_input_rules, build_mark_nodes, render_template
 
 
 # WHY: Normaliza sólo cuando la política lo solicita; evita que comparaciones físicas fallen por formato incidental.
@@ -101,24 +102,24 @@ def chunk_count(total_records: int, capacity: int) -> int:
     return math.ceil(total_records / capacity)
 
 
-# WHY: Separa contenido interno de una marca individual para insertarla en el SVG del lote.
-def _extract_svg(svg: str) -> str:
-    idx = svg.find("<svg")
-    return svg[idx:] if idx >= 0 else svg
+# WHY: Prefijo de espacio de nombres de una marca dentro de un lote.
+# Cada posicion recibe su propio prefijo (``mark_0001__``) para que los identificadores
+# de sus elementos no puedan colisionar con los de otra marca del mismo documento.
+def mark_namespace(sequence: int) -> str:
+    return f"mark_{sequence:04d}"
 
 
-# WHY: Anida una marca en su slot conservando unidades y traslación física.
-def _nest_mark(svg: str, x_mm: float, y_mm: float, width_mm: float, height_mm: float) -> str:
-    root = _extract_svg(svg)
-    # Template viewBox uses millimetres as user units. Strip its outer SVG and
-    # translate the contents to the calibrated mark origin. This avoids duplicate
-    # width/height attributes and keeps exact geometry.
-    start = root.find(">")
-    end = root.rfind("</svg>")
-    if start < 0 or end < 0:
-        raise ValueError("invalid mark SVG")
-    inner = root[start + 1:end]
-    return f'<g transform="translate({x_mm:.4f} {y_mm:.4f})">{inner}</g>'
+def _place_mark(namespace: str, nodes, x_mm: float, y_mm: float) -> str:
+    """Place one already-built mark at its physical slot origin.
+
+    WHY: ``translate`` es la unica transformacion que LightBurn, Sculpfun Space e
+    Inkscape interpretan de forma identica, y deja la geometria interna en los
+    milimetros absolutos de la plantilla, tal como los ve el disenador.
+    """
+    # WHY: Se reutiliza el mismo serializador de elemento que la marca individual
+    # para que la rotacion de un objeto se comporte igual suelta que dentro de un lote.
+    inner = "".join(element_group(n) for n in nodes if n.svg)
+    return f'<g id="{namespace}" transform="translate({x_mm:.4f} {y_mm:.4f})">{inner}</g>'
 
 
 # WHY: Agrupa el SVG final y la información usada para manifestar cada posición.
@@ -139,6 +140,9 @@ def render_batch(
     rows: list[dict[str, str]],
     assignments: list[BatchAssignment],
     require_physical_confirmation: bool = True,
+    mode: str = "production",
+    text_as_paths: bool = False,
+    marking_mode_override: MarkingMode | None = None,
 ) -> BatchRenderResult:
     slots = {int(s["slot_index"]): s for s in slot_positions(jig)}
     warnings: list[str] = []
@@ -177,13 +181,20 @@ def render_batch(
         elif require_physical_confirmation:
             raise ValueError(f"Slot {a.slot_index}: falta confirmación del ID escrito físicamente")
 
-        mark = render_template(template, quality, row)
-        warnings.extend([f"slot {a.slot_index}: {w}" for w in mark.warnings])
+        namespace = mark_namespace(len(manifest) + 1)
+        # WHY: Un registro de IDs por marca, con prefijo propio, hace estructuralmente
+        # imposible repetir un identificador entre posiciones del mismo lote.
+        registry = IdRegistry(prefix=f"{namespace}__")
+        nodes, mark_warnings, _resolved, _ids, _estimated = build_mark_nodes(
+            template, quality, row, registry, text_as_paths=text_as_paths,
+            marking_mode=(marking_mode_override or template.marking_mode), svg_mode=mode
+        )
+        warnings.extend([f"slot {a.slot_index}: {w}" for w in mark_warnings])
         mx = float(slot["mark_x_mm"])
         my = float(slot["mark_y_mm"])
         if mx + template.width_mm > machine.bed_width_mm or my + template.height_mm > machine.bed_height_mm:
             raise ValueError(f"Slot {a.slot_index}: el marcado sale del área útil de {machine.name}")
-        parts.append(_nest_mark(mark.svg, mx, my, template.width_mm, template.height_mm))
+        parts.append(_place_mark(namespace, nodes, mx, my))
         manifest.append({
             "slot_index": a.slot_index,
             "row_index": a.row_index,
@@ -193,6 +204,11 @@ def render_batch(
             "mark_x_mm": mx,
             "mark_y_mm": my,
             "template_id": template.id,
+            "polarity": (marking_mode_override or template.marking_mode).polarity,
+            "polarity_scope": (marking_mode_override or template.marking_mode).polarity_scope,
+            "negative_field": (marking_mode_override or template.marking_mode).negative_field,
+            "field_margin_mm": (marking_mode_override or template.marking_mode).field_margin_mm,
+            "kerf_compensation_mm": (marking_mode_override or template.marking_mode).kerf_compensation_mm,
         })
 
     # Registration-only outlines are deliberately dashed and assigned to a non-marking guide group.
@@ -204,17 +220,30 @@ def render_batch(
             f'fill="none" stroke="#00A0FF" stroke-width="0.15" stroke-dasharray="2,2"/>'
         )
 
-    svg = (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{machine.bed_width_mm:.3f}mm" '
-        f'height="{machine.bed_height_mm:.3f}mm" viewBox="0 0 {machine.bed_width_mm:.3f} {machine.bed_height_mm:.3f}">\n'
-        f'<g id="MARKS">{"".join(parts)}</g>\n'
-        f'</svg>'
+    metadata = {
+        "template_id": template.id,
+        "template_version": template.version,
+        "jig_id": jig.id,
+        "machine_profile_id": machine.id,
+        "record_count": str(len(manifest)),
+        "generated_by": GENERATOR_NAME,
+        "generated_version": GENERATOR_VERSION,
+        "units": "mm",
+        "svg_mode": mode,
+        "polarity": (marking_mode_override or template.marking_mode).polarity,
+        "polarity_scope": (marking_mode_override or template.marking_mode).polarity_scope,
+        "negative_field": (marking_mode_override or template.marking_mode).negative_field,
+        "field_margin_mm": str((marking_mode_override or template.marking_mode).field_margin_mm),
+        "kerf_compensation_mm": str((marking_mode_override or template.marking_mode).kerf_compensation_mm),
+    }
+    svg = build_batch_document(
+        machine.bed_width_mm, machine.bed_height_mm,
+        marks_svg="".join(parts), guides_svg="", mode=mode, metadata=metadata,
     )
-    preview_svg = (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{machine.bed_width_mm:.3f}mm" '
-        f'height="{machine.bed_height_mm:.3f}mm" viewBox="0 0 {machine.bed_width_mm:.3f} {machine.bed_height_mm:.3f}">\n'
-        f'<g id="GUIDES_DO_NOT_ENGRAVE" opacity="0.35">{"".join(guides)}</g>\n'
-        f'<g id="MARKS">{"".join(parts)}</g>\n'
-        f'</svg>'
+    preview_svg = build_batch_document(
+        machine.bed_width_mm, machine.bed_height_mm,
+        marks_svg="".join(parts),
+        guides_svg=f'<g id="GUIDES_DO_NOT_ENGRAVE" opacity="0.35">{"".join(guides)}</g>',
+        mode=mode, metadata={**metadata, "artifact": "preview_do_not_engrave"},
     )
     return BatchRenderResult(svg=svg, preview_svg=preview_svg, warnings=warnings, manifest=manifest)

@@ -1,4 +1,4 @@
-# Manual rápido — Server Oficina Marking Studio 0.6.2
+# Manual rápido — Server Oficina Marking Studio 0.8.0
 
 Pensado para un operador que conoce el equipo, pero no necesita saber programación, SVG o GRBL.
 
@@ -140,3 +140,130 @@ Al imprimir una prueba en papel o importar a LightBurn/Sculpfun Space, conserve 
 
 La prueba definitiva sigue siendo: grabar sobre material equivalente y leer varias veces con el lector real desde distintas posiciones.
 
+
+
+---
+
+## Novedades de la versión 0.7.0 — guía breve
+
+### Cargar un archivo de Excel
+
+1. En **Lotes / CSV**, pulse *Archivo Excel / CSV / lista*.
+2. Si es un libro de Excel aparecerá el selector **Hoja de Excel**. Elija la hoja que
+   contiene el inventario. El programa no adivina cuál es.
+3. Revise la tabla de vista previa. Debajo indica de qué hoja se leyó y cuántos registros
+   hay en total.
+4. Si los encabezados no se detectaron bien, cambie *Encabezados* y el archivo se vuelve a
+   leer solo; no hace falta seleccionarlo otra vez.
+
+### Recuperar ceros perdidos por Excel
+
+Si en Excel tenía `00184` y el programa muestra `184`, el número perdió su formato al
+guardarse. No lo corrija a mano fila por fila:
+
+1. Abra la plantilla en **Estudio visual**.
+2. En las reglas de captura del campo, ponga *Rellenar con ceros hasta* = `5`.
+3. Todos los registros recuperan el ancho: `184` vuelve a ser `00184`.
+
+Un valor que ya sea más largo nunca se recorta.
+
+### Comprobar que cada dato llega al objeto correcto
+
+En el panel de mapeo, pulse sobre un campo. Se iluminan a la vez la columna del archivo, la
+fila del panel y el objeto en el lienzo. Así ve de un vistazo que `serial` alimenta el
+código de barras **y** el texto legible.
+
+Use *Primero*, *Siguiente*, *Último* y **Aleatorio** para revisar varios registros. El
+aleatorio sirve para detectar datos más largos de lo normal que se salgan de la etiqueta.
+
+### Girar un objeto
+
+Selecciónelo y use los botones `0° 90° 180° 270°`, o escriba un ángulo. La vista real se
+actualiza al instante y el giro se conserva en el archivo exportado.
+
+### Deshacer
+
+`Ctrl+Z` deshace y `Ctrl+Y` rehace, o use los botones de la barra. Un arrastre completo se
+deshace de una sola vez.
+
+### Colocar objetos con precisión
+
+- Los objetos se **imantan** a la rejilla, al centro del lienzo y a los bordes de otros
+  objetos. Aparece una línea rosa indicando a qué se está alineando.
+- Para un ajuste milimétrico sin imantado, desmarque **Ajustar** en la barra.
+- Seleccione varios objetos con `Ctrl+clic` y use los botones de alineación.
+
+### Elegir qué archivos generar
+
+Son dos preguntas independientes:
+
+- **Modo de salida**: lote sobre el jig, un SVG por registro, o ambos.
+- **Exportación SVG**: *Producción* (recomendada) o *Maestro editable*, que conserva el
+  texto como texto para poder ajustarlo en Inkscape.
+
+Puede definir el nombre de los archivos con un patrón como `{economico}_{serial}`.
+
+
+## 16. Modo físico de marcado — directo e invertido (0.8.0)
+
+El modo habitual sigue siendo **Directo / positivo**. Si no necesita experimentar con relieve o con una superficie que aclara al láser, no cambie nada: la pantalla conserva el flujo histórico.
+
+Al elegir **Invertido / negativo** aparecen opciones avanzadas:
+
+- **Alcance `codes`**: sólo QR/Code 128/Code 39/Data Matrix se invierten.
+- **Alcance `all`**: también se invierten texto y geometría auxiliar; el texto se convierte a contorno.
+- **Campo `islands`**: cada elemento tiene su propia isla de fondo; es la primera opción a probar porque elimina menos material.
+- **Campo `template`**: usa toda la plantilla como un campo. Con `scope=all` fusiona la geometría; con `scope=codes` genera un artefacto explícito de **2 etapas**, porque el fondo/código y el contenido positivo requieren operaciones separadas.
+- **Margen de campo**: amplía el área alrededor de la isla.
+- **Compensación de kerf**: por defecto es `0`. Sólo introduzca un valor después de medirlo físicamente. El número representa la recuperación TOTAL del ancho; `0.10 mm` significa `0.05 mm` por lado.
+
+El sistema identifica `codes + template` como **DOS ETAPAS** y usa `_NEGATIVE_2PASS`; Marking Studio no ejecuta ni asigna potencia/velocidad a esas etapas. Un maestro editable no se genera con `negative + all`, porque el texto debe convertirse a contornos.
+
+### Probar sin contaminar la plantilla
+
+En **Generador** o **Lotes / CSV**, el trabajo hereda el ajuste guardado en la plantilla. Puede cambiarlo temporalmente para experimentar. Ese cambio NO modifica el estándar guardado hasta pulsar **Guardar en la plantilla**. Si cambia la huella física (polaridad/alcance/campo/margen/kerf), la plantilla incrementa su versión.
+
+### Comparación antes de gastar material
+
+Use **Comparar positivo / negativo**. La izquierda es la referencia óptica esperada; la derecha es la instrucción de ablación que se enviaría al software de la máquina. No intente escanear el negativo como criterio de calidad.
+
+También puede generar el **Cupón de caracterización** con las cuatro combinaciones invertidas del mismo dato: codes/islands, codes/template 2PASS, all/islands y all/template. El positivo se consulta en la vista comparativa. Grábelo sólo sobre material de descarte para descubrir qué estrategia merece validarse.
+
+### Preflight
+
+**Probar legibilidad** siempre califica el símbolo positivo canónico, aunque el archivo productivo sea negativo. Ésta es una regla deliberada: el negativo indica qué retira el láser; el lector debe recibir al final una polaridad óptica normal después de la respuesta del material o del acabado.
+
+### Nombres y advertencias
+
+Los archivos de producción negativos llevan `_NEGATIVE` y los ZIP incluyen una advertencia. No quite ese sufijo antes de la operación. El histórico y el manifiesto registran polaridad, alcance, campo, margen y kerf.
+
+### Guardar evidencia física
+
+En **Materiales / Presets**, guarde sólo lo que realmente haya probado en la misma máquina/superficie: máquina, preset, modo físico, lector, intentos, lecturas correctas y nota `validado_sobre`. Una referencia investigada no es un preset validado.
+
+### Flujo recomendado para la primera validación
+
+1. Use una pieza de descarte.
+2. Mantenga el preset que el área ya conoce, salvo que el Material Test indique otra cosa.
+3. Genere el cupón o compare dos estrategias.
+4. Haga Frame en LightBurn/Sculpfun Space/LaserGRBL.
+5. Grabe.
+6. Si el método requiere marcador/pintura, aplíquelo y limpie el excedente.
+7. Escanee al menos 5 veces con el COM-597.
+8. Registre intentos/éxitos y observaciones.
+9. Sólo después guarde el ajuste como validado.
+
+**Pendiente físico:** potencia, velocidad, foco, kerf real, contraste, abrasión y comportamiento del `fill-rule=evenodd` dentro del software de máquina real no se dan por aprobados desde el software.
+
+
+## 17. Agregar una imagen o logo
+
+1. Abra **Estudio visual**.
+2. Pulse **Imagen / logo** y seleccione PNG, JPG/JPEG o SVG.
+3. Mueva y cambie el tamaño del elemento en el lienzo.
+4. Para PNG/JPG elija **Umbral** para logos de dos tonos o **Floyd–Steinberg** para tonos continuos; ajuste el umbral/DPI sólo si entiende su efecto.
+5. Para SVG use `auto/vector`; Marking Studio sanea el archivo y rechaza scripts/recursos externos.
+6. Revise **Vista real SVG** y las advertencias. Si la imagen invade la quiet zone de un código, sepárela.
+7. Pruebe el resultado sobre material de descarte antes de guardar un estándar físico.
+
+Una imagen no recibe clasificación ROBUSTO/FRÁGIL porque no es un código escaneable. En negativo con alcance `codes` permanece positiva; alcance `all` con imagen se rechaza por ahora.

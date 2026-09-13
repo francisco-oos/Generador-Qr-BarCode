@@ -251,3 +251,40 @@ El software puede cerrarse técnicamente con tests de generación, parsing, segu
 La etiqueta inferior visible en la fotografía identifica un **Steren COM-597** (5 V, 300 mA USB). Esto corrige la hipótesis conservadora de un Steren 1D genérico para ese puesto. El COM-597 es un imager 1D/2D y admite Code 128, QR y Data Matrix. Se conserva el perfil 1D genérico porque podrían existir otros lectores en operación.
 
 Decisión: no cambiar las plantillas por esta capacidad extra. INOVA/Sercel continúan con Code 128 + texto por velocidad e inspección visual; teléfonos continúan con QR + económico. El COM-597 puede verificar ambos flujos con un solo dispositivo.
+
+
+## Decisión v0.8.0 — polaridad como geometría de ablación
+
+### Problema
+Una superficie puede aclararse con láser o producir poco contraste. Invertir ópticamente el dato no es suficiente ni seguro porque el lector real puede no admitir polaridad inversa.
+
+### Alternativas consideradas
+- reimplementar/invertir los encoders: descartado; cambia la codificación y duplica lógica probada;
+- rasterizar y negar la imagen: descartado para códigos; pierde vector, dimensiones y editabilidad;
+- booleanos geométricos generales: descartado por dependencia innecesaria;
+- **campo exterior + huecos con `fill-rule=evenodd`**: adoptado.
+
+### Decisión
+Conservar geometría positiva canónica y aplicar una capa física posterior. Para kerf, expandir módulos protegidos y unir rectángulos solapados antes de `evenodd`, evitando cancelación de paridad sin una librería booleana general.
+
+### Seguridad
+El preflight califica positivo. El negativo recibe `_NEGATIVE`, metadatos y advertencias. `codes+template` se representa como artefacto de **dos etapas** con capas separadas y `_NEGATIVE_2PASS`; no se ejecuta automáticamente. Kerf inicia en cero.
+
+### Evidencia / límite
+XML, svglib, CairoSVG e Inkscape se prueban en el host cuando están disponibles. **LightBurn/Sculpfun Space/LaserGRBL reales y la máquina física siguen NO PROBADOS/PENDIENTES FÍSICOS**; no se infiere compatibilidad productiva sólo de que otro renderer acepte `evenodd`.
+
+### Elemento imagen
+Se difiere deliberadamente: aceptar SVG/PNG/JPG introduce sanitización de contenido externo, dithering/vectorización y criterios de calidad diferentes a los códigos. Debe revisarse como fase separada.
+
+
+## 2026-09-13 — elemento imagen y procesamiento binario
+
+**Problema.** El Estudio Visual necesitaba grabar logos/gráficos sin convertir Marking Studio en editor fotográfico ni introducir recursos externos no auditables.
+
+**Alternativas evaluadas.** (1) incrustar el raster sin procesar y delegar todo al software de máquina; (2) vectorizar cualquier raster con una dependencia especializada; (3) normalizar dentro de Marking Studio sólo las transformaciones mínimas: SVG saneado como vector y raster a 1-bit por threshold/Floyd–Steinberg.
+
+**Decisión.** Se eligió (3). Pillow ya existía en el proyecto; permite una conversión determinista a 1-bit sin añadir otra cadena de dependencias. El SVG subido se limita a un subconjunto geométrico y se rechazan scripts, recursos externos, `foreignObject`, filtros y texto vivo.
+
+**Descartes.** No se añadió un vectorizador de contornos general porque aumentaría dependencias y no resolvería la calidad física. Tampoco se delega una URL/ruta al SVG final porque rompería portabilidad y seguridad.
+
+**Límite.** Un raster binario correcto en software no certifica el grabado. Calidad, resolución útil, material y durabilidad permanecen pendientes de aceptación física.

@@ -1,4 +1,4 @@
-# Guía de mantenimiento y revisión técnica — v0.6.2
+# Guía de mantenimiento y revisión técnica — v0.7.0
 
 ## Propósito
 
@@ -107,3 +107,17 @@ Las plantillas tienen su propio `version` y no deben depender exclusivamente de 
 ## Invariante adicional: preflight ≠ certificación física
 
 `app/code_quality.py` debe seguir reutilizando los generadores reales de `barcode_engine.py`; no debe mantener una segunda implementación de QR/barcode. Su clasificación sólo es un filtro preventivo. Nunca cambie mensajes o estados para afirmar certificación ISO/IEC o aprobación de material sin una prueba física documentada.
+
+
+## Invariantes físicos v0.8.0
+
+1. **El negativo es una capa física, no otra codificación.** Nunca duplique/reemplace el generador matemático para invertir.
+2. **Preflight positivo.** `code_quality` debe seguir recibiendo la geometría canónica; si llega un `even-odd` negativo, es un error de arquitectura.
+3. **Kerf medido.** Default `0`; no derive valores desde «spot aproximado» ni desde material.
+4. **No ramas por fabricante.** La estrategia vive en `MarkingMode`, plantillas y presets; no en `if INOVA/SERCEL/...`.
+5. **No control productivo del láser.** Mantener `$I/$$`, `direct_laser_job_streaming=false`.
+6. **Artefacto negativo inequívoco.** `_NEGATIVE` + metadatos + manifiesto/histórico + advertencia ZIP.
+7. **`codes+template` = dos etapas.** No simplificarlo a una sola operación: conservar capas separadas, `requires_secondary_operation`, `_NEGATIVE_2PASS` y advertencia explícita.
+8. **`negative/all` necesita contornos.** No producir un maestro editable fingiendo que `<text>` vivo puede restarse del campo.
+9. **Área de ablación es sólo geometría.** Nunca convertir el porcentaje en potencia, temperatura o tiempo.
+10. **Imagen es contenido no confiable.** Toda imagen debe pasar por `image_element.py`; no permitir URLs externas, scripts ni SVG arbitrario sin sanear. Imagen no participa en preflight de códigos y su calidad sigue pendiente de aceptación física.

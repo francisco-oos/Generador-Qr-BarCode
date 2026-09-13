@@ -175,3 +175,25 @@ Usar una placa/etiqueta de activo apta para láser (por ejemplo, aluminio anodiz
 ## 10. Regla final
 
 La biblioteca `config/materials/material_reference_v1.json` es **informativa y de seguridad**. Los presets de producción provienen de la operación real y quedan en SQLite/material presets importados. El sistema nunca debe convertir automáticamente un rango web en un ajuste listo para disparar el láser.
+
+
+## Evidencia de modo físico validado — v0.8.0
+
+La biblioteca local no debe responder «qué potencia usa el plástico», sino «qué se probó en esta combinación concreta». Un preset puede conservar: máquina, material/superficie/modelo, velocidad/potencia/pasadas/foco/intervalo, `MarkingMode`, perfil de lector, intentos, lecturas correctas, resultado y una nota `validated_on`.
+
+Jerarquía de confianza:
+
+1. ajuste validado por el área sobre la misma máquina y superficie;
+2. referencia específica del fabricante;
+3. investigación;
+4. Material Test.
+
+La polaridad que funciona pertenece físicamente a la combinación material+máquina+acabado. Marking Studio permite guardarla en una plantilla por conveniencia operativa, pero `validated_on` debe recordar el contexto y **no convierte esa plantilla en una receta universal**.
+
+Para un modo negativo, registrar también si hubo acabado (marcador/pintura), lector, intentos y éxitos. Un resultado parcial/fallido nunca debe mostrarse como preset validado.
+
+## Evidencia de polaridad y arte de imagen — v0.8.0
+
+Los presets del área pueden conservar el `MarkingMode` realmente probado y evidencia de lectura. Esto no convierte el material en una receta universal: máquina, superficie/modelo, preset, fecha y lector siguen siendo contexto necesario.
+
+Los elementos `image` no heredan un preset especial ni una “receta para fotos”. El threshold/Floyd–Steinberg define geometría 1-bit, no energía del láser. Antes de adoptar un logo/imagen como estándar debe probarse sobre descarte con el preset del material correspondiente.

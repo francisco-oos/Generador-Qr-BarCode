@@ -102,7 +102,7 @@ def record_job(template_id: str, jig_id: str | None, machine_id: str | None,
                 "INSERT INTO engraving_marks(job_id,slot_index,asset_key,physical_id,status,template_id,payload_json) VALUES(?,?,?,?,?,?,?)",
                 (
                     job_id,
-                    int(m["slot_index"]),
+                    int(m.get("slot_index", m.get("index", 0))),
                     str(m.get("id") or ""),
                     str(m.get("physical_id") or ""),
                     "exported",
@@ -134,13 +134,21 @@ def history(limit: int = 100) -> list[dict]:
         rows = con.execute(
             """
             SELECT m.id,m.job_id,m.slot_index,m.asset_key,m.physical_id,m.status,m.template_id,
-                   m.verified_at,m.verified_scan,j.created_at,j.jig_id,j.machine_id
+                   m.verified_at,m.verified_scan,j.created_at,j.jig_id,j.machine_id,j.metadata_json
             FROM engraving_marks m JOIN engraving_jobs j ON j.id=m.job_id
             ORDER BY m.id DESC LIMIT ?
             """,
             (limit,),
         ).fetchall()
-        return [dict(r) for r in rows]
+        out=[]
+        for r in rows:
+            item=dict(r)
+            try:
+                item["job_metadata"] = json.loads(item.pop("metadata_json"))
+            except Exception:
+                item["job_metadata"] = {}
+            out.append(item)
+        return out
 
 
 # WHY: Guarda metadatos/hash de una configuración importada para demostrar su procedencia sin modificar el original.
@@ -223,7 +231,10 @@ def record_shop_material_preset(*, name: str, machine_profile_id: str, material:
                                 surface_or_model: str, operation: str, speed_mm_min: float,
                                 power_percent: float, passes: int, interval_mm: float | None,
                                 focus_reference_mm: float | None, laser_mode: str,
-                                validated_on_exact_machine_surface: bool, notes: str) -> dict:
+                                validated_on_exact_machine_surface: bool, notes: str,
+                                marking_mode=None, scanner_profile_id: str | None = None,
+                                scan_validation: str = "not_tested", scan_attempts: int | None = None,
+                                scan_successes: int | None = None) -> dict:
     """Persist an operator-entered shop baseline through the same audited capture model.
 
     Reusing ``machine_captures`` + ``material_presets`` means batch jobs can select
@@ -240,6 +251,11 @@ def record_shop_material_preset(*, name: str, machine_profile_id: str, material:
         "laser_mode": laser_mode,
         "validated_on_exact_machine_surface": validated_on_exact_machine_surface,
         "notes": notes,
+        "marking_mode": marking_mode.model_dump() if hasattr(marking_mode, "model_dump") else (marking_mode or None),
+        "scanner_profile_id": scanner_profile_id,
+        "scan_validation": scan_validation,
+        "scan_attempts": scan_attempts,
+        "scan_successes": scan_successes,
     }
     digest = __import__('hashlib').sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
     status = "VALIDADO EN ÁREA" if validated_on_exact_machine_surface else "BORRADOR / POR VALIDAR"
@@ -255,7 +271,8 @@ def record_shop_material_preset(*, name: str, machine_profile_id: str, material:
         source_type="shop_manual_validated" if validated_on_exact_machine_surface else "shop_manual_draft",
         source_name=name,
         sha256=digest,
-        summary={"status": status, "material": material, "surface_or_model": surface_or_model},
+        summary={"status": status, "material": material, "surface_or_model": surface_or_model,
+                 "marking_mode": payload.get("marking_mode"), "scan_validation": scan_validation},
         settings={"authoritative_local_baseline": validated_on_exact_machine_surface},
         material_presets=[preset],
         warnings=[] if validated_on_exact_machine_surface else ["Preset guardado como borrador; no debe tratarse como ajuste aprobado de producción."],

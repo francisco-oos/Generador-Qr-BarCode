@@ -25,3 +25,46 @@
 
 /* v0.6.2 — legibility preflight */
 .edit-only-banner{margin:0 0 10px;padding:8px 10px;border:1px solid #6d5b2c;border-radius:8px;background:#1a160b;color:#e8cf8a;font-size:12px}.quality-toolbar{align-items:center;justify-content:flex-start}.quality-toolbar label{min-width:260px;margin:0}.quality-results{display:grid;gap:10px;margin-top:12px}.quality-summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#0c151e}.quality-summary.ok{border-color:#246d51}.quality-summary.warn{border-color:#806522}.quality-summary.bad{border-color:#7b3030}.quality-summary span{color:var(--muted);font-size:12px}.quality-card{border:1px solid var(--line);border-radius:10px;padding:12px;background:#0c141d}.quality-card.ok{border-left:4px solid var(--ok)}.quality-card.warn{border-left:4px solid var(--warn)}.quality-card.bad{border-left:4px solid var(--bad)}.quality-card ul{margin:8px 0 0;padding-left:20px}.quality-card li{margin:4px 0}.quality-card li.ok{color:var(--ok)}.quality-card li.warn{color:var(--warn)}.quality-card li.bad{color:var(--bad)}.quality-card li.info{color:#a8bad0}.quality-metrics{display:flex;flex-wrap:wrap;gap:8px 14px;margin:8px 0;color:var(--muted);font-size:12px}.quality-metrics b{color:var(--text)}.variant-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.variant-grid span{padding:4px 7px;border-radius:999px;border:1px solid var(--line);font-size:11px}.variant-grid span.ok{border-color:#246d51;color:var(--ok)}.variant-grid span.bad{border-color:#7b3030;color:var(--bad)}
+
+/* WHY (v0.7.0): La vista previa tabular y el navegador de registros son controles
+   nuevos; se limitan en alto para que no desplacen el resto del flujo del lote. */
+.data-preview{margin:.5rem 0}
+.data-preview .preview-caption{margin-bottom:.25rem;font-size:.85em}
+.preview-scroll{max-height:16rem;overflow:auto;border:1px solid var(--line,#d7dde5);border-radius:6px}
+.preview-scroll table{width:100%;border-collapse:collapse;font-size:.85em}
+.preview-scroll th,.preview-scroll td{padding:.25rem .5rem;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line,#eef1f5)}
+.preview-scroll thead th{position:sticky;top:0;background:var(--panel,#fff);z-index:1}
+.record-nav{flex-wrap:wrap;gap:.35rem;align-items:center;margin-bottom:.5rem}
+.record-nav button{padding:.25rem .6rem;font-size:.85em}
+.record-counter{display:inline-flex;align-items:center;gap:.35rem;font-size:.85em}
+.record-counter input{width:6rem}
+
+/* WHY (v0.7.0): Controles del estudio visual. El resaltado de mapeo usa un color
+   distinto del de selección para que "este objeto usa esta columna" no se confunda
+   con "este objeto está seleccionado para moverlo". */
+.designer-toolbar{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;margin:.4rem 0;padding:.35rem .5rem;border:1px solid var(--line,#d7dde5);border-radius:6px}
+.designer-toolbar .tool-group{display:flex;align-items:center;gap:.25rem}
+.designer-toolbar button{padding:.2rem .5rem;font-size:.9em;line-height:1.4}
+.designer-toolbar button:disabled{opacity:.4;cursor:not-allowed}
+.designer-toolbar .tool-label{font-size:.8em;margin-right:.2rem}
+.designer-toolbar .tool-num{display:inline-flex;align-items:center;gap:.25rem;font-size:.8em}
+.designer-toolbar .tool-num input{width:4.5rem}
+.selection-info{font-size:.82em;margin:.25rem 0}
+.rotation-quick{gap:.3rem;align-items:center;margin:.35rem 0}
+.rotation-quick button{padding:.15rem .5rem;font-size:.85em}
+.design-object.multi{outline:2px dashed #6b7cff;outline-offset:1px}
+.design-object.mapping-hit{box-shadow:0 0 0 2px #ffab00 inset}
+.snap-guide{position:absolute;background:#ff4dd2;pointer-events:none;z-index:5}
+.snap-guide.vertical{top:0;bottom:0;width:1px}
+.snap-guide.horizontal{left:0;right:0;height:1px}
+.layer-item.in-selection{border-color:#6b7cff}
+.layer-item.mapping-hit{box-shadow:0 0 0 2px #ffab00 inset}
+.map-row{display:flex;flex-direction:column;gap:.15rem;padding:.25rem;border-radius:5px;border:1px solid transparent}
+.map-row.focused{border-color:#ffab00;background:rgba(255,171,0,.08)}
+.map-consumers{display:flex;flex-wrap:wrap;gap:.25rem}
+.map-consumers .chip{font-size:.72em;padding:.05rem .35rem;border-radius:10px;border:1px solid var(--line,#d7dde5)}
+.preview-scroll .column-hit{background:rgba(255,171,0,.18)}
+/* WHY (v0.8.0): la divulgación progresiva mantiene el modo directo igual de simple; los parámetros físicos avanzados sólo aparecen al elegir invertido. */
+.marking-mode-box{margin-top:12px}.negative-options[hidden]{display:none!important}.compare-marking-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px}.compare-marking-grid article{border:1px solid var(--line,#d9dee7);border-radius:10px;padding:10px;background:#fff}.compare-marking-grid .preview{min-height:160px;margin-top:8px}
+/* WHY (v0.8.0 final): imagen/logo se distingue del código ficticio del lienzo; la geometría real sólo aparece en la vista SVG productiva. */
+.design-object.kind-image{background:rgba(170,120,255,.12);border-style:solid}.fake-image{font-size:26px;line-height:1}

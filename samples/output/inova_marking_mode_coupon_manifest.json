@@ -1,0 +1,46 @@
+[
+  {
+    "panel": "A",
+    "label": "DIRECTO",
+    "polarity": "positive",
+    "polarity_scope": "codes",
+    "negative_field": "islands",
+    "field_margin_mm": 0.0,
+    "kerf_compensation_mm": 0.0,
+    "estimated_ablation_mm2": null,
+    "estimated_ablation_ratio": null
+  },
+  {
+    "panel": "B",
+    "label": "NEG CODES ISLANDS",
+    "polarity": "negative",
+    "polarity_scope": "codes",
+    "negative_field": "islands",
+    "field_margin_mm": 0.5,
+    "kerf_compensation_mm": 0.0,
+    "estimated_ablation_mm2": 269.7249999999999,
+    "estimated_ablation_ratio": 0.28816773504273496
+  },
+  {
+    "panel": "C",
+    "label": "NEG ALL ISLANDS",
+    "polarity": "negative",
+    "polarity_scope": "all",
+    "negative_field": "islands",
+    "field_margin_mm": 0.5,
+    "kerf_compensation_mm": 0.0,
+    "estimated_ablation_mm2": 524.7249999999999,
+    "estimated_ablation_ratio": 0.5606036324786324
+  },
+  {
+    "panel": "D",
+    "label": "NEG ALL TEMPLATE",
+    "polarity": "negative",
+    "polarity_scope": "all",
+    "negative_field": "template",
+    "field_margin_mm": 0.0,
+    "kerf_compensation_mm": 0.0,
+    "estimated_ablation_mm2": 936.0,
+    "estimated_ablation_ratio": 1.0
+  }
+]

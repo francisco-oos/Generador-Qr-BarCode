@@ -72,8 +72,33 @@ def load_quality_profiles() -> dict[str, QualityProfile]:
 
 
 # WHY: Persiste una plantilla validada de forma atómica y legible para revisión humana.
+def _bump_template_minor(version: str) -> str:
+    """Bump the human-facing template version when physical output semantics change."""
+    parts = str(version or "1.0").split(".")
+    try:
+        major = int(parts[0]) if parts else 1
+        minor = int(parts[1]) if len(parts) > 1 else 0
+    except ValueError:
+        return "1.1"
+    return f"{major}.{minor + 1}"
+
+
+# WHY: Persistir una estrategia física distinta bajo la misma versión volvería ambiguo el histórico de lotes.
 def save_template(template: TemplateSpec) -> Path:
     path = CONFIG / "templates" / f"{template.id}.json"
+    # WHY (v0.8.0): changing polarity/scope/field/kerf changes the physical piece.
+    # If the caller did not already advance the template version, do it here so an
+    # old and a new lot cannot share the same version while engraving differently.
+    if path.exists():
+        try:
+            previous = TemplateSpec.model_validate(_read_json(path))
+            if previous.marking_mode.physical_fingerprint() != template.marking_mode.physical_fingerprint():
+                if template.version == previous.version:
+                    template.version = _bump_template_minor(previous.version)
+        except Exception:
+            # Validation errors are handled by the normal save path; an unreadable
+            # previous file must not make the new valid template impossible to save.
+            pass
     path.write_text(json.dumps(template.model_dump(), indent=2, ensure_ascii=False), encoding="utf-8")
     load_templates.cache_clear()
     return path

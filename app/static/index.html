@@ -10,7 +10,7 @@
   <header class="topbar">
     <div>
       <div class="eyebrow">SERVER OFICINA</div>
-      <h1>Marking Studio <span class="version">v0.6.2</span></h1>
+      <h1>Marking Studio <span class="version">v0.8.0</span></h1>
       <p>Identificación física estandarizada · QR · Code 128 · Data Matrix · lotes CSV</p>
     </div>
     <div class="top-actions"><div class="mode-switch" aria-label="Modo de experiencia"><button id="guidedModeBtn" class="mode active">Modo guiado</button><button id="expertModeBtn" class="mode">Modo experto</button></div><div id="licenseBadge" class="badge">Cargando licencia…</div></div>
@@ -59,6 +59,22 @@
         <article class="panel">
           <h2>Generar marcado individual</h2>
           <label>Plantilla<select id="individualTemplate"></select></label>
+          <div class="series-box marking-mode-box">
+            <div class="panel-head"><strong>Modo de grabado</strong><span class="muted">propiedad física del trabajo</span></div>
+            <label>Polaridad<select id="individualPolarity"><option value="positive">Directo / positivo</option><option value="negative">Invertido / negativo</option></select></label>
+            <div id="individualNegativeOptions" class="negative-options" hidden>
+              <div class="form-grid compact">
+                <label>Alcance<select id="individualPolarityScope"><option value="codes">Sólo códigos</option><option value="all">Todo el contenido</option></select></label>
+                <label>Campo<select id="individualNegativeField"><option value="islands">Islas por elemento</option><option value="template">Plantilla completa (sólo códigos = 2 etapas)</option></select></label>
+                <label>Margen de campo mm<input id="individualFieldMargin" type="number" min="0" step="0.1" value="0" /></label>
+                <label>Compensación kerf total mm<input id="individualKerf" type="number" min="0" step="0.01" value="0" /></label>
+              </div>
+              <label>Validado sobre / nota<input id="individualValidatedOn" placeholder="Máquina, superficie, preset, fecha…" /></label>
+              <div class="msg warn">Invertido describe qué retira el láser. El preflight sigue evaluando el símbolo positivo esperado. Kerf = 0 hasta medir pieza real. “Sólo códigos + Plantilla completa” genera un artefacto de 2 etapas y exige separar operaciones en el software de la máquina.</div>
+            </div>
+            <div class="actions"><button id="individualCompareMarkingBtn" type="button">Comparar + / −</button><button id="individualCouponBtn" type="button">Descargar cupón 4 modos</button><button id="individualSaveMarkingBtn" type="button">Guardar en la plantilla</button></div>
+          </div>
+
           <div id="individualFields" class="form-grid"></div>
           <div class="actions">
             <button id="renderBtn" class="primary">Actualizar vista previa</button>
@@ -72,7 +88,7 @@
           <div id="preview" class="preview"><span class="muted">Seleccione plantilla y datos.</span></div>
           <p class="hint"><strong>ESCANEABLE:</strong> esta vista usa el mismo SVG que se exporta. No permita que otro programa reduzca o estire el archivo; importe/grabe a tamaño físico 100%.</p>
           <div class="inline quality-toolbar"><label>Lector objetivo<select id="individualScanner"></select></label><button id="individualQualityBtn" class="secondary">Probar legibilidad</button></div>
-          <div id="individualQualityResult" class="quality-results"></div>
+          <div id="individualQualityResult" class="quality-results"></div><div id="individualMarkingCompare" class="compare-marking-grid"></div>
           <p class="hint">El SVG es el formato recomendado para LightBurn o Sculpfun Space. El PNG a 600 DPI es una alternativa raster para LaserGRBL.</p>
         </article>
       </div>
@@ -92,8 +108,29 @@
           <label>Plantilla<select id="batchTemplate"></select></label>
           <label>Jig / base<select id="batchJig"></select></label>
           <label>Preset de material / grabado<select id="batchMaterialPreset"><option value="">— ninguno / definir en LightBurn —</option></select></label>
-          <label>Archivo CSV / lista<input id="csvFile" type="file" accept=".csv,.txt" /></label>
-          <label>Encabezados<select id="csvHeaderMode"><option value="auto">Detectar automáticamente</option><option value="yes">La primera fila es encabezado</option><option value="no">Lista sin encabezado</option></select></label>
+          <div class="series-box marking-mode-box">
+            <div class="panel-head"><strong>Modo de grabado</strong><span class="muted">propiedad física del trabajo</span></div>
+            <label>Polaridad<select id="batchPolarity"><option value="positive">Directo / positivo</option><option value="negative">Invertido / negativo</option></select></label>
+            <div id="batchNegativeOptions" class="negative-options" hidden>
+              <div class="form-grid compact">
+                <label>Alcance<select id="batchPolarityScope"><option value="codes">Sólo códigos</option><option value="all">Todo el contenido</option></select></label>
+                <label>Campo<select id="batchNegativeField"><option value="islands">Islas por elemento</option><option value="template">Plantilla completa (sólo códigos = 2 etapas)</option></select></label>
+                <label>Margen de campo mm<input id="batchFieldMargin" type="number" min="0" step="0.1" value="0" /></label>
+                <label>Compensación kerf total mm<input id="batchKerf" type="number" min="0" step="0.01" value="0" /></label>
+              </div>
+              <label>Validado sobre / nota<input id="batchValidatedOn" placeholder="Máquina, superficie, preset, fecha…" /></label>
+              <div class="msg warn">Invertido describe qué retira el láser. El preflight sigue evaluando el símbolo positivo esperado. Kerf = 0 hasta medir pieza real. “Sólo códigos + Plantilla completa” genera un artefacto de 2 etapas y exige separar operaciones en el software de la máquina.</div>
+            </div>
+            <div class="actions"><button id="batchSaveMarkingBtn" type="button">Guardar en la plantilla</button></div>
+          </div>
+
+          <label>Archivo Excel / CSV / lista<input id="csvFile" type="file" accept=".csv,.txt,.tsv,.xlsx,.xlsm" /></label>
+          <div class="inline">
+            <label>Encabezados<select id="csvHeaderMode"><option value="auto">Detectar automáticamente</option><option value="yes">La primera fila es encabezado</option><option value="no">Lista sin encabezado</option></select></label>
+            <label id="csvSheetWrap" hidden>Hoja de Excel<select id="csvSheet"></select></label>
+            <label>Filas en vista previa<input id="csvPreviewLimit" type="number" min="1" max="500" value="25" /></label>
+          </div>
+          <div id="csvPreviewTable" class="data-preview"></div>
           <div class="series-box">
             <div class="panel-head"><strong>O generar una serie controlada</strong><span class="muted">opcional</span></div>
             <div class="form-grid compact">
@@ -109,7 +146,19 @@
           </div>
           <div id="csvInfo" class="messages"></div>
           <div id="fieldMapping" class="form-grid"></div>
-          <div class="series-box"><div class="panel-head"><strong>Vista previa del primer registro</strong><span class="muted">se actualiza con el mapeo</span></div><div id="batchRecordPreview" class="mini-preview"><span class="muted">Cargue datos para previsualizar.</span></div><div id="batchPreviewMsg" class="messages"></div></div>
+          <div class="series-box">
+            <div class="panel-head"><strong>Vista previa de registro</strong><span class="muted">usa el motor real de producción</span></div>
+            <div class="inline record-nav">
+              <button id="recFirstBtn" type="button" title="Primer registro">⏮ Primero</button>
+              <button id="recPrevBtn" type="button">◀ Anterior</button>
+              <label class="record-counter">Registro <input id="recIndex" type="number" min="1" value="1" /> <span id="recTotal" class="muted">/ 0</span></label>
+              <button id="recNextBtn" type="button">Siguiente ▶</button>
+              <button id="recLastBtn" type="button" title="Último registro">Último ⏭</button>
+              <button id="recRandomBtn" type="button" title="Comprobar variaciones de longitud">Aleatorio 🎲</button>
+            </div>
+            <div id="batchRecordPreview" class="mini-preview"><span class="muted">Cargue datos para previsualizar.</span></div>
+            <div id="batchPreviewMsg" class="messages"></div>
+          </div>
           <div class="inline">
             <label>Inicio del lote<input id="batchOffset" type="number" min="0" value="0" /></label>
             <button id="prepareBatchBtn" class="primary">Preparar posiciones</button>
@@ -125,8 +174,22 @@
           <div class="panel-head"><h2>2. Posiciones del jig</h2><span id="jigCapacity" class="muted"></span></div>
           <div id="jigGrid" class="jig-grid"></div>
           <div id="assignmentTable"></div>
+          <div class="series-box">
+            <div class="panel-head"><strong>4. Modo de salida</strong><span class="muted">qué archivos quiere recibir</span></div>
+            <label class="check"><input type="radio" name="outputMode" value="jig" checked /> Lote colocado sobre el jig (ZIP de trabajo)</label>
+            <label class="check"><input type="radio" name="outputMode" value="individual" /> Un SVG por registro</label>
+            <label class="check"><input type="radio" name="outputMode" value="both" /> Ambos</label>
+            <div class="form-grid compact">
+              <label>Nombre de archivo<input id="filenamePattern" placeholder="{serial} o {economico}_{serial}" /></label>
+              <label>Exportación SVG<select id="svgExportMode">
+                <option value="production">Producción (recomendada)</option>
+                <option value="editable">Maestro editable (texto como texto)</option>
+              </select></label>
+            </div>
+            <p class="hint">El patrón usa los nombres de campo entre llaves. Los caracteres no válidos para Windows/Linux/macOS se sustituyen automáticamente.</p>
+          </div>
           <div class="actions">
-            <button id="exportBatchBtn" class="primary">Exportar trabajo ZIP</button><button id="exportAllSvgBtn">Generar SVG individuales del CSV</button>
+            <button id="exportBatchBtn" class="primary">Generar salida</button>
           </div>
           <div id="batchMessages" class="messages"></div>
         </article>
@@ -152,6 +215,22 @@
         <div class="designer-head-grid">
           <label>Plantilla base<select id="configTemplate"></select></label>
           <div class="actions designer-actions"><button id="newTemplateBtn">Nueva en blanco</button><button id="duplicateTemplateBtn">Duplicar</button><button id="saveVisualTemplateBtn" class="primary">Guardar plantilla</button></div>
+          <div class="series-box marking-mode-box">
+            <div class="panel-head"><strong>Modo de grabado</strong><span class="muted">propiedad física del trabajo</span></div>
+            <label>Polaridad<select id="designerPolarity"><option value="positive">Directo / positivo</option><option value="negative">Invertido / negativo</option></select></label>
+            <div id="designerNegativeOptions" class="negative-options" hidden>
+              <div class="form-grid compact">
+                <label>Alcance<select id="designerPolarityScope"><option value="codes">Sólo códigos</option><option value="all">Todo el contenido</option></select></label>
+                <label>Campo<select id="designerNegativeField"><option value="islands">Islas por elemento</option><option value="template">Plantilla completa (sólo códigos = 2 etapas)</option></select></label>
+                <label>Margen de campo mm<input id="designerFieldMargin" type="number" min="0" step="0.1" value="0" /></label>
+                <label>Compensación kerf total mm<input id="designerKerf" type="number" min="0" step="0.01" value="0" /></label>
+              </div>
+              <label>Validado sobre / nota<input id="designerValidatedOn" placeholder="Máquina, superficie, preset, fecha…" /></label>
+              <div class="msg warn">Invertido describe qué retira el láser. El preflight sigue evaluando el símbolo positivo esperado. Kerf = 0 hasta medir pieza real. “Sólo códigos + Plantilla completa” genera un artefacto de 2 etapas y exige separar operaciones en el software de la máquina.</div>
+            </div>
+            <div class="actions"><button id="designerCompareMarkingBtn" type="button">Comparar + / −</button></div>
+          </div>
+
           <label>Nombre<input id="designerName" /></label>
           <label>ID técnico<input id="designerId" /></label>
           <label>Categoría<input id="designerCategory" placeholder="phone, node_inova, custom…" /></label>
@@ -173,6 +252,8 @@
             <button data-add-kind="code39">Code 39</button>
             <button data-add-kind="qr">QR</button>
             <button data-add-kind="datamatrix">Data Matrix</button>
+            <button id="addImageElementBtn" type="button">Imagen / logo</button>
+            <input id="designerImageInput" type="file" accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml" hidden />
             <button data-add-kind="rect">Rectángulo</button>
             <button data-add-kind="line">Línea</button>
           </div>
@@ -197,13 +278,36 @@
         <article class="panel designer-stage-panel">
           <div class="panel-head"><h2>Lienzo de edición</h2><span id="designerSizeLabel" class="muted"></span></div>
           <div class="edit-only-banner">Representación para mover/ordenar objetos — <strong>NO escaneable</strong></div>
+          <div class="designer-toolbar">
+            <div class="tool-group">
+              <button id="undoBtn" type="button" title="Deshacer (Ctrl+Z)" disabled>↶ Deshacer</button>
+              <button id="redoBtn" type="button" title="Rehacer (Ctrl+Y / Ctrl+Shift+Z)" disabled>↷ Rehacer</button>
+            </div>
+            <div class="tool-group">
+              <label class="check" title="Desactívelo para ajustes finos sin imantado"><input id="snapEnabled" type="checkbox" checked /> Ajustar</label>
+              <label class="tool-num">Rejilla mm<input id="snapGrid" type="number" min="0.1" max="10" step="0.1" value="0.5" /></label>
+            </div>
+            <div class="tool-group" id="alignGroup">
+              <span class="muted tool-label">Alinear</span>
+              <button data-align="left" type="button" title="Alinear a la izquierda">⇤</button>
+              <button data-align="center-h" type="button" title="Centrar horizontalmente">⇔</button>
+              <button data-align="right" type="button" title="Alinear a la derecha">⇥</button>
+              <button data-align="top" type="button" title="Alinear arriba">⤒</button>
+              <button data-align="center-v" type="button" title="Centrar verticalmente">⇕</button>
+              <button data-align="bottom" type="button" title="Alinear abajo">⤓</button>
+              <button data-align="dist-h" type="button" title="Distribuir horizontalmente">⋯</button>
+              <button data-align="dist-v" type="button" title="Distribuir verticalmente">⋮</button>
+            </div>
+          </div>
           <div class="designer-canvas-wrap"><div id="designerCanvas" class="designer-canvas"></div></div>
+          <div id="designerSelectionInfo" class="muted selection-info">Sin selección. Ctrl+clic o Shift+clic para seleccionar varios.</div>
           <p class="hint">Arrastre objetos para moverlos. Los barcode/QR dibujados aquí son ayudas visuales de edición; el borde azul tampoco se exporta.</p>
           <div class="panel-head section-gap"><h2>Vista real SVG de producción</h2><span class="status-ok">ESCANEABLE · mismo motor de exportación</span></div>
           <div id="designerDataFields" class="form-grid compact"></div>
           <div id="designerPreview" class="preview designer-real-preview"><span class="muted">Seleccione o cree una plantilla.</span></div>
           <div class="inline quality-toolbar"><label>Lector objetivo<select id="designerScanner"></select></label><button id="designerQualityBtn" class="secondary">Probar código</button></div>
           <div id="designerQualityResult" class="quality-results"></div>
+          <div id="designerMarkingCompare" class="compare-marking-grid"></div>
           <div id="designerWarnings" class="messages"></div>
         </article>
 
@@ -225,6 +329,42 @@
             </div>
             <label>Alineación<select id="propAlign"><option value="left">Izquierda</option><option value="center">Centro</option><option value="right">Derecha</option></select></label>
             <label>Corrección QR<select id="propEc"><option>L</option><option selected>M</option><option>Q</option><option>H</option></select></label>
+            <div id="imagePropertyGroup" class="series-box" hidden>
+              <strong>Imagen / logo</strong>
+              <label>Procesamiento<select id="propImageProcessing">
+                <option value="auto">Automático</option>
+                <option value="vector">Vector SVG sanitizado</option>
+                <option value="threshold">Raster 1-bit por umbral</option>
+                <option value="floyd_steinberg">Raster 1-bit Floyd–Steinberg</option>
+              </select></label>
+              <div class="form-grid compact">
+                <label>Umbral 0–255<input id="propImageThreshold" type="number" min="0" max="255" step="1" value="128" /></label>
+                <label>Muestreo DPI<input id="propImageDpi" type="number" min="50" max="1200" step="1" value="254" /></label>
+              </div>
+              <label class="check"><input id="propImageAspect" type="checkbox" checked /> Conservar proporción</label>
+              <div class="muted" id="propImageSource"></div>
+              <button id="replaceImageBtn" type="button">Reemplazar archivo</button>
+              <p class="hint">PNG/JPG se convierten a geometría binaria para grabado. SVG se sanea y conserva como vector. La calidad física depende del material/máquina y debe probarse sobre descarte.</p>
+            </div>
+            <div class="form-grid compact">
+              <label>Rotación °<input id="propRotation" type="number" step="1" min="0" max="359" value="0" /></label>
+              <label>Quiet zone (módulos)<input id="propQuiet" type="number" step="1" min="0" max="64" placeholder="perfil" /></label>
+            </div>
+            <label class="legacy-engraving" hidden>Estrategia de grabado heredada
+              <select id="propEngravingMode">
+                <option value="positive">Normal — grabar barras / módulos</option>
+                <option value="negative_background">Negativo — grabar fondo y dejar código en relieve</option>
+              </select>
+            </label>
+            <p class="hint legacy-engraving" id="engravingModeHint" hidden>El modo negativo está pensado para pruebas de relieve/relleno: graba el fondo y deja barras/módulos sin grabar. No presupone que el código invertido crudo sea legible; confirme el acabado real con el lector.</p>
+            <div class="inline rotation-quick">
+              <span class="muted">Giro rápido</span>
+              <button data-rotate="0" type="button">0°</button>
+              <button data-rotate="90" type="button">90°</button>
+              <button data-rotate="180" type="button">180°</button>
+              <button data-rotate="270" type="button">270°</button>
+            </div>
+            <p class="hint" id="quietHint">Vacío = usa la quiet zone del perfil de calidad. Reducirla emite una advertencia y no la oculta: confírmela con el lector real.</p>
             <div class="actions"><button id="duplicateElementBtn">Duplicar elemento</button><button id="deleteElementBtn" class="danger">Eliminar</button></div>
           </div>
           <div class="series-box section-gap">
@@ -301,6 +441,20 @@
             <label>Modo láser<select id="shopPresetLaserMode"><option value="unknown">No registrado</option><option value="M4">M4 dinámico</option><option value="M3">M3 constante</option></select></label>
           </div>
           <label class="check"><input id="shopPresetValidated" type="checkbox" /> Confirmo que este ajuste ya fue probado en esta misma máquina y superficie</label>
+          <div class="form-grid compact">
+            <label>Polaridad validada<select id="shopPresetPolarity"><option value="positive">Directo</option><option value="negative">Invertido</option></select></label>
+            <label>Lector<select id="shopPresetScanner"><option value="">— no registrado —</option></select></label>
+            <label>Resultado lectura<select id="shopPresetScanValidation"><option value="not_tested">No probado</option><option value="pass">PASS</option><option value="partial">Parcial</option><option value="fail">FAIL</option></select></label>
+            <label>Intentos<input id="shopPresetScanAttempts" type="number" min="0" /></label>
+            <label>Lecturas correctas<input id="shopPresetScanSuccesses" type="number" min="0" /></label>
+          </div>
+          <div id="shopPresetNegativeOptions" class="form-grid compact marking-negative-options" hidden>
+            <label>Alcance<select id="shopPresetPolarityScope"><option value="codes">Sólo códigos</option><option value="all">Todo el contenido</option></select></label>
+            <label>Campo<select id="shopPresetNegativeField"><option value="islands">Islas por elemento</option><option value="template">Plantilla completa (sólo códigos = 2 etapas)</option></select></label>
+            <label>Margen de campo (mm)<input id="shopPresetFieldMargin" type="number" min="0" step="0.05" value="0" /></label>
+            <label>Compensación kerf TOTAL (mm)<input id="shopPresetKerf" type="number" min="0" step="0.01" value="0" /></label>
+          </div>
+          <label>Validado sobre / contexto<input id="shopPresetValidatedOn" placeholder="p. ej. carcasa INOVA Quantum · S9 Pro · pieza descarte · fecha" /></label>
           <label>Notas<input id="shopPresetNotes" placeholder="Contraste visible, fecha, operador, observaciones…" /></label>
           <button id="saveShopPresetBtn" class="primary">Guardar ajuste del área</button>
           <div id="shopPresetMsg" class="messages"></div>

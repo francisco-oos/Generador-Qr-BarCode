@@ -1,66 +1,44 @@
 {
   "project": "Server Oficina Marking Studio",
-  "version": "0.6.2",
-  "generated_at_utc": "2026-09-13T00:08:12.379089+00:00",
-  "status": "PASS_SOFTWARE_READY_FOR_CONTROLLED_PHYSICAL_PILOT",
-  "scope": {
-    "scan_quality_preflight": "PASS — geometry + scanner capability + optional digital stress decoding; physical acceptance remains authoritative",
-    "maintainability": "PASS — WHY comments + regenerated code review guide + maintainer invariants",
-    "ux_flow": "PASS — edit canvas explicitly non-scannable; production SVG explicitly scannable; guided/expert flows retained",
-    "visual_template_studio": "PASS — drag/drop, mm geometry, live production preview, per-code quality test",
-    "csv_flexibility": "PASS — auto/forced/no headers, one-column lists, user field mapping",
-    "hardcoding_reduction": "PASS — templates/jigs/scanners/quality/input rules remain configuration-driven",
-    "bulk_generation": "PASS — 1000 automated test and independent 5000-row export; max 10000/request",
-    "machine_boundary": "PASS — no production streaming; handoff to LightBurn/Sculpfun Space/LaserGRBL",
-    "shop_settings": "PASS — read-only import/capture of LightBurn/LaserGRBL/GRBL settings",
-    "calibration": "PASS — P0/PX/PY geometry and calibration-only SVG",
-    "scanner_profile": "PASS — Steren COM-597 profile used by preflight; scanner selection is catalog-driven"
+  "version": "0.8.0",
+  "status": "RELEASE_CANDIDATE_VERIFIED_IN_DEVELOPMENT_TREE",
+  "base": "0.7.1",
+  "pre_baseline": "158/158 PASS",
+  "post_tests": {
+    "collected": 196,
+    "result": "196/196 PASS across all test files; final image/polarity/documentation regressions rerun after last changes"
   },
   "qa": {
-    "pytest": "59/59 PASS",
-    "python_compileall": "PASS",
-    "javascript_node_check": "PASS",
-    "documentation_contract": "PASS",
-    "ux_contract": "PASS",
+    "compileall": "PASS",
+    "node_check": "PASS",
     "compatibility_check": "PASS",
-    "quality_preflight": {
-      "status": "PASS",
-      "inova": "ROBUSTO 7/7",
-      "sercel": "ROBUSTO 7/7",
-      "phone_qr": "ROBUSTO 6/7",
-      "undersized_control": "FRAGIL"
-    },
+    "quality_preflight": "PASS",
     "scan_simulation": "28/28 PASS",
-    "inova_3x4_decode": "12/12 PASS",
-    "svg_interop": "PASS (XML + svglib + Inkscape)",
-    "configuration_importers": "4/4 PASS",
-    "grbl_readonly_simulator": "PASS — only $I and $$",
-    "bulk_svg_5000": "PASS — 5000 SVG, ~5.29 MB ZIP, ~10.35 s on validation host",
-    "benchmark": {
-      "records_input": 1200,
-      "jig_capacity": 12,
-      "batches_for_1200": 100,
-      "individual_render_2500_seconds": 4.97,
-      "individual_render_2500_per_second": 503.0,
-      "process_peak_rss_delta_mib": 5.62,
-      "checksum": 16219920,
-      "batch_vector_render_1200_seconds": 2.353,
-      "batch_records_produced": 1200,
-      "last_full_bed_png_300dpi_seconds": 5.334,
-      "last_full_bed_png_bytes": 175034,
-      "status": "PASS"
-    },
-    "browser_e2e": "SKIP_POLICY — API/HTML fallback PASS including quality preflight"
+    "batch_decode": "12/12 PASS with svglib and CairoSVG",
+    "svg_interop": "PASS; Inkscape available plus svglib/CairoSVG",
+    "configuration_imports": "4/4 PASS",
+    "grbl_serial_simulator": "PASS; commands limited to $I and $$",
+    "browser_smoke": "API/HTML PASS; real Chromium E2E SKIP_POLICY on this host"
   },
-  "field_observation": {
-    "printed_sheet_photo": "Independent photo decode recovered TEL-0037 (QR) and 4281847 (Code 128). Other visible symbols are not declared PASS from the photo and require the physical Steren test.",
-    "interpretation": "Confirms digital generator works through print/photo for at least one QR and one Code128; also demonstrates why physical scanner/scale/contrast remain required."
+  "benchmark": {
+    "records_input": 1200,
+    "jig_batches": 100,
+    "individual_render_2500_seconds": 2.108,
+    "individual_renders_per_second": 1185.9,
+    "batch_vector_render_1200_seconds": 0.979,
+    "full_bed_png_300dpi_seconds": 5.68
   },
-  "platform_validation": {
-    "executed_host": "Linux 6.18.35 / Python 3.13.5",
-    "launchers_present": "Windows/Linux/macOS PASS",
-    "cross_platform_note": "Source/config/launcher compatibility checked here; Windows/macOS execution requires real host/CI. pyzbar may need native zbar on Linux/macOS."
+  "safety_invariants": {
+    "direct_laser_job_streaming": false,
+    "safe_grbl_commands": ["$I", "$$"],
+    "preflight_uses_positive_canonical_geometry": true,
+    "negative_two_stage_suffix": "_NEGATIVE_2PASS",
+    "image_external_resources_allowed": false
   },
-  "package_reextract_validation": "PASS — candidate archive re-extracted cleanly; 176 packaged files matched SHA-256 manifest; compileall, JavaScript syntax, 59/59 pytest and API/HTML browser fallback including quality preflight passed from extracted package.",
-  "physical_limits": "Laser/material/focus/contrast/jig repeatability are not digitally certified. Use physical acceptance plan and shop-validated presets."
+  "not_proven": [
+    "real LightBurn/Sculpfun Space/LaserGRBL handoff in this session",
+    "physical laser/material/kerf/abrasion behavior",
+    "physical COM-597 reading of engraved pieces",
+    "physical quality of raster/image engraving"
+  ]
 }

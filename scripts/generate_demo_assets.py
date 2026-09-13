@@ -11,15 +11,17 @@ from app.batch_engine import render_batch, slot_positions
 from app.calibration import calibration_target_svg
 from app.config_loader import load_jigs, load_machines, load_quality_profiles, load_templates
 from app.exporters import build_batch_zip, svg_to_png
-from app.models import BatchAssignment
+from app.models import BatchAssignment, MarkingMode
 from app.template_engine import render_template
+from app.marking_coupon import render_marking_coupon
 
 OUT = ROOT / "samples" / "output"
 OUT.mkdir(parents=True, exist_ok=True)
 
-def save_mark(name, template_id, data):
+# WHY: Un solo helper genera ejemplos positivos/negativos con la misma ruta productiva usada por la API.
+def save_mark(name, template_id, data, marking_mode=None):
     t=load_templates()[template_id]; q=load_quality_profiles()[t.quality_profile]
-    r=render_template(t,q,data)
+    r=render_template(t,q,data,marking_mode_override=marking_mode)
     (OUT/f"{name}.svg").write_text(r.svg,encoding="utf-8")
     (OUT/f"{name}.png").write_bytes(svg_to_png(r.svg,r.width_mm,r.height_mm,600))
     return r
@@ -30,6 +32,16 @@ save_mark("sercel_4281847_code128","sercel_dfu_code128_v1",{"manufacturer_id":"4
 save_mark("sercel_4281847_datamatrix","sercel_dfu_datamatrix_v1",{"manufacturer_id":"4281847"})
 save_mark("phone_TEL-0037","phone_qr_economic_v1",{"economic_number":"TEL-0037","asset_id":"PHONE-000037"})
 save_mark("radio_RADIO-000184","generic_asset_qr_v1",{"asset_id":"RADIO-000184"})
+
+negative_demo = MarkingMode(polarity="negative", polarity_scope="codes", negative_field="islands", field_margin_mm=0.5, kerf_compensation_mm=0.0)
+save_mark("inova_negative_Q00525499","inova_quantum_code128_v1",{"manufacturer_id":"Q00525499"},negative_demo)
+save_mark("phone_negative_TEL-0037","phone_qr_economic_v1",{"economic_number":"TEL-0037","asset_id":"PHONE-000037"},negative_demo)
+
+_coupon_t=load_templates()["inova_quantum_code128_v1"]; _coupon_q=load_quality_profiles()[_coupon_t.quality_profile]
+_coupon=render_marking_coupon(_coupon_t,_coupon_q,{"manufacturer_id":"Q00525499"},negative_base=negative_demo)
+(OUT/"inova_marking_mode_coupon.svg").write_text(_coupon["svg"],encoding="utf-8")
+(OUT/"inova_marking_mode_coupon_300dpi.png").write_bytes(svg_to_png(_coupon["svg"],_coupon["width_mm"],_coupon["height_mm"],300))
+(OUT/"inova_marking_mode_coupon_manifest.json").write_text(json.dumps(_coupon["panels"],indent=2,ensure_ascii=False),encoding="utf-8")
 
 j=load_jigs()["inova_tray_3x4_estimate"]; m=load_machines()[j.machine_profile_id]
 t=load_templates()[j.template_id]; q=load_quality_profiles()[t.quality_profile]

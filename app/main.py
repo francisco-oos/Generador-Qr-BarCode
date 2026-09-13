@@ -11,6 +11,7 @@ already used by its SCULPFUN or another GRBL engraver.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import base64
 import re
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,8 @@ from .db import (
     record_shop_material_preset,
     verify_mark,
 )
+from .filenames import resolve_filename
+from .tabular import DEFAULT_PREVIEW, detect_format, inspect_tabular, list_sheets
 from .exporters import build_batch_zip, build_bulk_template_zip, svg_to_png
 from .licensing import get_license_provider
 from .machine_bridge import (
@@ -55,6 +58,7 @@ from .machine_bridge import (
     sha256_bytes,
 )
 from .models import (
+    MarkingMode,
     BatchExportRequest,
     GrblParseRequest,
     GrblProbeRequest,
@@ -71,15 +75,18 @@ from .models import (
     TemplatePreviewRequest,
     BulkTemplateExportRequest,
     CodeQualityCheckRequest,
+    MarkingComparisonRequest,
+    MarkingCouponRequest,
 )
 from .template_engine import apply_input_rules, render_template
 from .calibration import calibration_target_svg, evaluate_reference_points, jig_reference_points
 from .material_catalog import phone_reference, search_material_reference
 from .code_quality import assess_template_codes
+from .marking_coupon import render_marking_coupon
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "app" / "static"
-VERSION = "0.6.2"
+VERSION = "0.8.0"
 
 
 # WHY: Inicializa almacenamiento y recursos una sola vez al arrancar/cerrar la aplicación.
@@ -178,7 +185,12 @@ def render(req: RenderRequest):
         raise HTTPException(500, f"Perfil de calidad no encontrado: {template.quality_profile}")
     try:
         normalized = apply_input_rules(template, req.data, capture_mode=req.capture_mode)
-        mark = render_template(template, quality, normalized)
+        mark = render_template(
+            template, quality, normalized,
+            mode=req.svg_mode,
+            text_as_paths=req.text_as_paths and req.svg_mode == "production",
+            marking_mode_override=req.marking_mode_override,
+        )
     except Exception as exc:
         raise HTTPException(400, f"No fue posible renderizar: {exc}") from exc
 
@@ -197,6 +209,15 @@ def render(req: RenderRequest):
         "warnings": mark.warnings,
         "resolved": mark.resolved,
         "calibration_required": template.calibration_required,
+        "svg_mode": req.svg_mode,
+        "element_ids": mark.element_ids,
+        "marking_mode": mark.marking_mode,
+        "estimated_ablation_mm2": mark.estimated_ablation_mm2,
+        "estimated_ablation_ratio": mark.estimated_ablation_ratio,
+        "filename_suffix": (
+            "_NEGATIVE_2PASS" if mark.marking_mode.get("polarity") == "negative" and mark.marking_mode.get("polarity_scope") == "codes" and mark.marking_mode.get("negative_field") == "template"
+            else "_NEGATIVE" if mark.marking_mode.get("polarity") == "negative" else ""
+        ),
     }
 
 
@@ -217,37 +238,107 @@ def code_quality_check(req: CodeQualityCheckRequest) -> dict[str, Any]:
         return assess_template_codes(
             req.template, quality, req.data, capture_mode=req.capture_mode,
             scanner=scanner, dpi=req.dpi, digital_stress=req.digital_stress,
+            marking_mode_override=req.marking_mode_override,
         )
     except Exception as exc:
         raise HTTPException(400, f"No fue posible evaluar legibilidad: {exc}") from exc
 
 
+# WHY: Compara la geometría positiva que se escanea con la geometría
+# negativa que describe la ablación, sin obligar al operador a gastar material.
+@app.post("/api/marking/compare")
+def marking_compare(req: MarkingComparisonRequest) -> dict[str, Any]:
+    _require_license()
+    quality = load_quality_profiles().get(req.template.quality_profile)
+    if not quality:
+        raise HTTPException(400, f"Perfil de calidad no encontrado: {req.template.quality_profile}")
+    normalized = apply_input_rules(req.template, req.data, capture_mode=req.capture_mode)
+    try:
+        positive = render_template(
+            req.template, quality, normalized, mode="production",
+            marking_mode_override=MarkingMode(),
+        )
+        negative = render_template(
+            req.template, quality, normalized, mode="production",
+            marking_mode_override=req.negative_mode,
+        )
+    except Exception as exc:
+        raise HTTPException(400, f"No fue posible generar la comparación: {exc}") from exc
+    payload = {
+        "positive_svg": positive.svg,
+        "negative_svg": negative.svg,
+        "positive_warnings": positive.warnings,
+        "negative_warnings": negative.warnings,
+        "negative_mode": negative.marking_mode,
+        "estimated_negative_ablation_mm2": negative.estimated_ablation_mm2,
+        "estimated_negative_ablation_ratio": negative.estimated_ablation_ratio,
+        "note": "El positivo es la referencia de lectura; el negativo es la instrucción de ablación y requiere aceptación física.",
+    }
+    if req.include_png:
+        positive_png = svg_to_png(positive.svg, positive.width_mm, positive.height_mm, dpi=req.dpi)
+        negative_png = svg_to_png(negative.svg, negative.width_mm, negative.height_mm, dpi=req.dpi)
+        payload["png_dpi"] = req.dpi
+        payload["positive_png_base64"] = base64.b64encode(positive_png).decode("ascii")
+        payload["negative_png_base64"] = base64.b64encode(negative_png).decode("ascii")
+    return payload
+
+
+# WHY: Genera una pieza comparativa de cuatro estrategias para validar físicamente polaridad sin alterar la plantilla.
+@app.post("/api/marking/coupon")
+def marking_coupon(req: MarkingCouponRequest) -> dict[str, Any]:
+    _require_license()
+    quality = load_quality_profiles().get(req.template.quality_profile)
+    if not quality:
+        raise HTTPException(400, f"Perfil de calidad no encontrado: {req.template.quality_profile}")
+    try:
+        return render_marking_coupon(req.template, quality, req.data, req.capture_mode, req.negative_mode)
+    except Exception as exc:
+        raise HTTPException(400, f"No fue posible generar el cupón de caracterización: {exc}") from exc
+
+
 # WHY: Analiza CSV/listas y devuelve columnas/filas para que el usuario mapee datos sin formato rígido.
 @app.post("/api/csv/inspect")
-async def csv_inspect(file: UploadFile = File(...), header_mode: str = "auto") -> dict[str, Any]:
+async def csv_inspect(file: UploadFile = File(...), header_mode: str = "auto",
+                      sheet: str | None = None, preview_limit: int = DEFAULT_PREVIEW) -> dict[str, Any]:
+    """Inspect an uploaded CSV, TXT or XLSX file before mapping columns.
+
+    WHY: La ruta conserva su nombre historico para no romper integraciones ya
+    escritas, pero desde v0.7.1 acepta tambien XLSX y devuelve la lista de hojas.
+    Los campos previos (``headers``, ``count``, ``rows``, ``preview``) se
+    mantienen con el mismo significado; los nuevos son aditivos.
+    """
     _require_license()
     raw = await file.read()
-    if len(raw) > 15 * 1024 * 1024:
-        raise HTTPException(413, "CSV demasiado grande (>15 MB)")
+    if len(raw) > 25 * 1024 * 1024:
+        raise HTTPException(413, "Archivo demasiado grande (>25 MB)")
     try:
-        text = raw.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        text = raw.decode("latin-1")
+        return inspect_tabular(
+            file.filename or "", raw,
+            header_mode=header_mode, sheet=sheet, preview_limit=preview_limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - se traduce a un error util para el operador
+        raise HTTPException(400, f"No fue posible leer el archivo: {exc}") from exc
+
+
+# WHY: Permite elegir la hoja ANTES de cargar los datos, para no leer un libro
+# completo solo para descubrir que el inventario estaba en la tercera pestaña.
+@app.post("/api/data/sheets")
+async def data_sheets(file: UploadFile = File(...)) -> dict[str, Any]:
+    _require_license()
+    raw = await file.read()
+    if len(raw) > 25 * 1024 * 1024:
+        raise HTTPException(413, "Archivo demasiado grande (>25 MB)")
+    kind = detect_format(file.filename or "", raw)
+    if kind == "xls_legacy":
+        raise HTTPException(400, "El formato .xls heredado no es compatible; guarde como .xlsx o .csv.")
+    if kind != "xlsx":
+        return {"filename": file.filename, "format": "text", "sheets": []}
     try:
-        mode = {"yes": True, "no": False, "auto": None}.get(header_mode)
-        if header_mode not in {"yes", "no", "auto"}:
-            raise ValueError("header_mode debe ser auto, yes o no")
-        headers, rows = parse_csv_text(text, has_header=mode)
-    except Exception as exc:
-        raise HTTPException(400, f"CSV inválido: {exc}") from exc
-    return {
-        "filename": file.filename,
-        "headers": headers,
-        "count": len(rows),
-        "rows": rows,
-        "preview": rows[:20],
-        "header_mode": header_mode,
-    }
+        return {"filename": file.filename, "format": "xlsx", "sheets": list_sheets(raw)}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, f"No fue posible leer el libro: {exc}") from exc
 
 
 # WHY: Genera secuencias explícitas y limitadas cuando la regla de numeración es conocida.
@@ -311,7 +402,20 @@ def batch_export(req: BatchExportRequest):
             rows=req.rows,
             assignments=req.assignments,
             require_physical_confirmation=req.require_physical_confirmation,
+            mode="production" if req.export_mode != "editable" else "editable",
+            text_as_paths=req.text_as_paths and req.export_mode != "editable",
+            marking_mode_override=req.marking_mode_override,
         )
+        # WHY: El maestro editable solo se genera si el trabajo lo pidio. Un lote de
+        # produccion normal no debe pagar el coste ni entregar archivos que nadie usa.
+        editable_batch = None
+        if req.export_mode in {"editable", "both"}:
+            editable_batch = render_batch(
+                machine=machine, jig=jig, template=template, quality=quality,
+                rows=req.rows, assignments=req.assignments,
+                require_physical_confirmation=req.require_physical_confirmation,
+                mode="editable", text_as_paths=False, marking_mode_override=req.marking_mode_override,
+            )
     except Exception as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -331,6 +435,7 @@ def batch_export(req: BatchExportRequest):
         "license_id": (license_info.get("payload") or {}).get("license_id"),
         "output_dpi": dpi,
         "material_preset": selected_material,
+        "marking_mode": (req.marking_mode_override or template.marking_mode).model_dump(),
         "safety": (
             "Archivo generado para importación en LightBurn/LaserGRBL. Marking Studio no envía "
             "movimiento, potencia ni disparo del láser. Los parámetros importados son referencia/auditoría; "
@@ -339,7 +444,13 @@ def batch_export(req: BatchExportRequest):
     }
     job_id = record_job(template.id, jig.id, machine.id, batch.manifest, req.rows, metadata)
     metadata["job_id"] = job_id
-    zip_bytes = build_batch_zip(batch.svg, batch.preview_svg, png, batch.manifest, metadata, raster_dpi=dpi)
+    metadata["export_mode"] = req.export_mode
+    metadata["text_as_paths"] = bool(req.text_as_paths and req.export_mode != "editable")
+    zip_bytes = build_batch_zip(
+        batch.svg, batch.preview_svg, png, batch.manifest, metadata, raster_dpi=dpi,
+        editable_svg=editable_batch.svg if editable_batch else None,
+        negative=(req.marking_mode_override or template.marking_mode).polarity == "negative",
+    )
     filename = f"marking-job-{job_id[:8]}.zip"
     return Response(
         content=zip_bytes,
@@ -383,7 +494,12 @@ def preview_template_api(req: TemplatePreviewRequest):
         raise HTTPException(400, f"Perfil de calidad no encontrado: {req.template.quality_profile}")
     try:
         normalized = apply_input_rules(req.template, req.data, capture_mode=req.capture_mode)
-        mark = render_template(req.template, quality, normalized)
+        mark = render_template(
+            req.template, quality, normalized,
+            mode=req.svg_mode,
+            text_as_paths=req.text_as_paths and req.svg_mode == "production",
+            marking_mode_override=req.marking_mode_override,
+        )
     except Exception as exc:
         raise HTTPException(400, f"No fue posible previsualizar la plantilla: {exc}") from exc
     if req.output == "png":
@@ -392,6 +508,10 @@ def preview_template_api(req: TemplatePreviewRequest):
     return {
         "svg": mark.svg, "width_mm": mark.width_mm, "height_mm": mark.height_mm,
         "warnings": mark.warnings, "resolved": mark.resolved,
+        "svg_mode": req.svg_mode, "element_ids": mark.element_ids,
+        "marking_mode": mark.marking_mode,
+        "estimated_ablation_mm2": mark.estimated_ablation_mm2,
+        "estimated_ablation_ratio": mark.estimated_ablation_ratio,
     }
 
 
@@ -407,44 +527,70 @@ def bulk_svg_export(req: BulkTemplateExportRequest):
     if not quality:
         raise HTTPException(500, f"Perfil de calidad no encontrado: {template.quality_profile}")
 
-    # WHY: Aísla safe_name para que el flujo sea testeable, mantenible y fácil de auditar.
-    def safe_name(value: str, index: int) -> str:
-        base = re.sub(r"[^A-Za-z0-9._-]+", "_", value.strip())[:100].strip("._-")
-        return base or f"mark_{index:05d}"
-
     items: list[dict[str, Any]] = []
     used: dict[str, int] = {}
     warnings: list[str] = []
+    want_production = req.export_mode in {"production", "both"}
+    want_editable = req.export_mode in {"editable", "both"}
     for index, row in enumerate(req.rows, start=1):
         normalized = apply_input_rules(template, row, capture_mode="import")
-        mark = render_template(template, quality, normalized)
-        if mark.warnings:
-            warnings.extend([f"fila {index}: {w}" for w in mark.warnings])
-        value = ""
-        if req.filename_field:
-            value = str(normalized.get(req.filename_field, ""))
-        if not value:
-            primary = str(template.metadata.get("primary_identity_field", ""))
-            if primary:
-                value = str(normalized.get(primary, ""))
-        if not value and template.expected_fields:
-            value = str(normalized.get(template.expected_fields[0], ""))
-        filename = safe_name(value, index)
+        primary = str(template.metadata.get("primary_identity_field", ""))
+        record_id = str(normalized.get(primary, "")) if primary else ""
+        production = editable = None
+        if want_production:
+            production = render_template(
+                template, quality, normalized, mode="production",
+                text_as_paths=req.text_as_paths, record_id=record_id,
+                marking_mode_override=req.marking_mode_override,
+            )
+        if want_editable:
+            editable = render_template(
+                template, quality, normalized, mode="editable",
+                text_as_paths=False, record_id=record_id,
+                marking_mode_override=req.marking_mode_override,
+            )
+        reference = production or editable
+        if reference and reference.warnings:
+            warnings.extend([f"fila {index}: {w}" for w in reference.warnings])
+        filename = resolve_filename(
+            normalized, template, req.filename_pattern, req.filename_field, index
+        )
+        effective_mode = req.marking_mode_override or template.marking_mode
+        if effective_mode.polarity == "negative":
+            filename = f"{filename}_NEGATIVE_2PASS" if (effective_mode.polarity_scope == "codes" and effective_mode.negative_field == "template") else f"{filename}_NEGATIVE"
         count = used.get(filename, 0) + 1
         used[filename] = count
         if count > 1:
             filename = f"{filename}_{count:03d}"
-        items.append({"filename": filename, "svg": mark.svg, "data": normalized})
+        items.append({
+            "filename": filename,
+            "svg": production.svg if production else None,
+            "editable_svg": editable.svg if editable else None,
+            "data": normalized,
+        })
 
-    payload = build_bulk_template_zip(items, {
+    bulk_metadata = {
         "template_id": template.id, "record_count": len(items),
         "warning_count": len(warnings), "warnings": warnings[:500],
         "machine_control": False,
+        "export_mode": req.export_mode,
+        "text_as_paths": bool(req.text_as_paths and want_production),
         "handoff": "Importar SVG en LightBurn/Sculpfun Space u otro software compatible.",
-    })
+        "marking_mode": (req.marking_mode_override or template.marking_mode).model_dump(),
+    }
+    primary = str(template.metadata.get("primary_identity_field", "")).strip()
+    audit_manifest = [
+        {"index": i, "slot_index": i-1, "row_index": i-1,
+         "id": str(item["data"].get(primary, "")) if primary else item["filename"],
+         "physical_id": "", "filename": item["filename"]}
+        for i, item in enumerate(items, start=1)
+    ]
+    job_id = record_job(template.id, None, None, audit_manifest, req.rows, bulk_metadata)
+    bulk_metadata["job_id"] = job_id
+    payload = build_bulk_template_zip(items, bulk_metadata)
     return Response(
         content=payload, media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{template.id}-svg-bulk.zip"', "X-Record-Count": str(len(items))},
+        headers={"Content-Disposition": f'attachment; filename="{template.id}-svg-bulk.zip"', "X-Record-Count": str(len(items)), "X-Job-Id": job_id},
     )
 
 
@@ -453,7 +599,8 @@ def bulk_svg_export(req: BulkTemplateExportRequest):
 def save_template_api(req: TemplateSaveRequest) -> dict[str, Any]:
     _require_license()
     path = save_template(req.template)
-    return {"saved": True, "id": req.template.id, "path": str(path.relative_to(ROOT))}
+    saved = load_templates().get(req.template.id)
+    return {"saved": True, "id": req.template.id, "version": saved.version if saved else req.template.version, "path": str(path.relative_to(ROOT))}
 
 
 # WHY: Actualiza una regla de captura específica sin obligar al frontend a reescribir a ciegas el archivo entero.

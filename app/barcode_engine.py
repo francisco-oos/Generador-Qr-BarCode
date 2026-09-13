@@ -2,33 +2,50 @@
 
 The engine returns SVG fragments whose dimensions are expressed in millimetres.
 It deliberately contains no INOVA/Sercel/phone rules; those live in JSON templates.
+
+WHY (v0.7.0):
+La *generacion* de cada simbologia sigue delegada en las mismas librerias que
+v0.6.2 (``reportlab.graphics.barcode`` y ``qrcode``).  Lo que cambio es la
+*serializacion*: antes se incrustaba el SVG que emitia ReportLab, con ``<svg>``
+anidado, ``clipPath`` compartido y ``transform="scale(1,-1)"``.  Ahora la
+geometria se extrae como rectangulos milimetricos (``code_geometry``) y se emite
+como un unico ``<path>`` plano en coordenadas absolutas del lienzo.
+
+Consecuencias buscadas, todas verificadas por pruebas:
+- ningun identificador generado por librerias externas entra al documento;
+- ningun recurso referenciado (``url(#...)``) puede colisionar entre marcas;
+- las coordenadas del archivo coinciden con los milimetros del disenador;
+- el mismo archivo se comporta igual en svglib, CairoSVG e Inkscape.
 """
 
 from __future__ import annotations
 
 import html
-import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Mapping
 
 import qrcode
 from qrcode.constants import ERROR_CORRECT_L, ERROR_CORRECT_M, ERROR_CORRECT_Q, ERROR_CORRECT_H
-from reportlab.graphics import renderSVG
 from reportlab.graphics.barcode import createBarcodeDrawing
 from reportlab.lib.units import mm
 
+from .code_geometry import Rectangle, expand_and_union_rects, merge_horizontal_runs, rects_from_drawing, rects_to_path_data
 
-# WHY: Resultado geométrico reutilizable con SVG interno y dimensiones físicas explícitas.
+
+# WHY: Resultado geometrico reutilizable con SVG interno y dimensiones fisicas explicitas.
+# ``rects`` guarda la geometria relativa al origen del fragmento para poder reposicionar
+# un simbolo sin volver a codificarlo, que es el paso costoso en lotes grandes.
 @dataclass(frozen=True)
 class SvgFragment:
     svg: str
     width_mm: float
     height_mm: float
+    rects: tuple[Rectangle, ...] = field(default=())
 
 
-# WHY: Permite formatear literales con campos ausentes sin romper todo el render durante diseño/preview.
+# WHY: Permite formatear literales con campos ausentes sin romper todo el render durante diseno/preview.
 class SafeFormatDict(dict):
-    # WHY: Conserva el marcador faltante para hacerlo visible al diseñador en lugar de perder silenciosamente información.
+    # WHY: Conserva el marcador faltante para hacerlo visible al disenador en lugar de perder silenciosamente informacion.
     def __missing__(self, key: str) -> str:
         return "{" + key + "}"
 
@@ -48,44 +65,85 @@ def resolve_value(data: Mapping[str, str], source: str | None, literal: str | No
     return ""
 
 
-# WHY: Extrae contenido y dimensiones de un SVG generado por librerías externas para integrarlo en nuestro documento físico.
-def _extract_svg_root(svg: str) -> str:
-    idx = svg.find("<svg")
-    if idx < 0:
-        raise ValueError("reportlab did not produce SVG")
-    return svg[idx:]
+# WHY: Punto unico de serializacion de cualquier simbolo; garantiza que todos los
+# generadores produzcan la misma clase de nodo SVG y evita divergencias por simbologia.
+def _fragment_from_rects(rects: list[Rectangle], x_mm: float, y_mm: float,
+                         width_mm: float, height_mm: float) -> SvgFragment:
+    merged = merge_horizontal_runs(rects)
+    path = rects_to_path_data(merged, x_mm, y_mm)
+    svg = f'<path d="{path}" fill="#000" fill-rule="nonzero"/>' if path else ""
+    return SvgFragment(svg, width_mm, height_mm, tuple(merged))
 
 
-# WHY: Anida un SVG externo con transformación y tamaño controlados sin duplicar cabeceras de documento.
-def _nest_svg(svg: str, x_mm: float, y_mm: float, width_mm: float, height_mm: float) -> str:
-    root = _extract_svg_root(svg)
-    # ReportLab emits width/height on the root. Remove them before adding placement
-    # attributes so the nested SVG remains valid XML (no duplicate attributes).
-    m = re.match(r"<svg\b([^>]*)>", root, flags=re.S)
-    if not m:
-        raise ValueError("invalid SVG root")
-    attrs = m.group(1)
-    attrs = re.sub(r'\s(?:width|height|x|y)="[^"]*"', '', attrs)
-    opening = (
-        f'<svg x="{x_mm:.4f}" y="{y_mm:.4f}" '
-        f'width="{width_mm:.4f}" height="{height_mm:.4f}"{attrs}>'
-    )
-    return opening + root[m.end():]
+# WHY: Genera el complemento vectorial del simbolo dentro de su propia
+# caja fisica. El laser llena el fondo/espacios y deja barras o modulos como
+# "islas" sin grabar. Esto habilita un flujo de relieve donde, tras grabar, se
+# puede frotar marcador/pintura sobre la superficie elevada para recuperar una
+# polaridad optica normal. La funcion NO afirma que el SVG negativo sea legible
+# directamente por cualquier lector; esa aceptacion sigue siendo fisica.
+# WHY: El complemento se aplica despues de generar la simbologia; no altera el dato codificado.
+def _expanded_rects(rects: tuple[Rectangle, ...] | list[Rectangle], total_compensation_mm: float, compensate_y: bool = True) -> list[Rectangle]:
+    """Expand and union protected modules before using them as even-odd holes.
 
-
-
-# WHY: Reposiciona un fragmento ya generado; se usa para alinear elementos sin regenerar la simbología.
-def reposition_fragment(fragment: SvgFragment, x_mm: float, y_mm: float) -> SvgFragment:
-    """Reposition a nested SVG fragment without regenerating the barcode.
-
-    This is important for CSV batches: barcode encoding is the expensive step, so
-    centering should only rewrite placement attributes.
+    WHY: adjacent QR/Data Matrix modules can touch.  Expanding each rectangle and
+    writing all of them directly into one even-odd path would make overlaps flip
+    parity and re-fill protected regions.  The axis-aligned union keeps the
+    intended physical semantics without a general boolean-geometry dependency.
     """
-    svg = re.sub(r'<svg\s+x="[^"]+"\s+y="[^"]+"',
-                 f'<svg x="{x_mm:.4f}" y="{y_mm:.4f}"', fragment.svg, count=1)
-    return SvgFragment(svg, fragment.width_mm, fragment.height_mm)
+    return expand_and_union_rects(rects, total_compensation_mm, compensate_y=compensate_y)
 
-# WHY: Genera Code 128 vectorial porque es el estándar inicial de nodos y mantiene lectura por escáner más texto visible.
+
+def negative_background_fragment(
+    fragment: SvgFragment, x_mm: float, y_mm: float,
+    field_margin_mm: float = 0.0, kerf_compensation_mm: float = 0.0,
+    kerf_compensate_y: bool = True,
+) -> SvgFragment:
+    """Return the geometric complement used for relief/background ablation.
+
+    The symbol encoder is untouched: the outer field is filled and the canonical
+    positive modules become holes using ``fill-rule=evenodd``.  A positive margin
+    grows only the sacrificial field; kerf compensation grows only the protected
+    module holes.
+    """
+    if not fragment.rects:
+        return fragment
+    margin = max(0.0, float(field_margin_mm or 0.0))
+    fx, fy = x_mm - margin, y_mm - margin
+    fw, fh = fragment.width_mm + 2*margin, fragment.height_mm + 2*margin
+    outer = f"M {fx:.4f} {fy:.4f} h {fw:.4f} v {fh:.4f} h {-fw:.4f} z"
+    protected = _expanded_rects(fragment.rects, kerf_compensation_mm, compensate_y=kerf_compensate_y)
+    # WHY: Un hueco compensado que sale del campo even-odd deja de ser un hueco y puede
+    # crear tinta/ablación fuera del rectángulo. Se rechaza antes de producir arte engañoso.
+    eps = 1e-6
+    for rx, ry, rw, rh in protected:
+        if rx < -margin - eps or ry < -margin - eps or rx + rw > fragment.width_mm + margin + eps or ry + rh > fragment.height_mm + margin + eps:
+            raise ValueError("kerf_compensation_mm demasiado grande para el campo/quiet zone del símbolo; aumente field_margin_mm o reduzca la compensación")
+    holes = rects_to_path_data(protected, x_mm, y_mm)
+    path = f"{outer} {holes}".strip()
+    return SvgFragment(
+        f'<path d="{path}" fill="#000" fill-rule="evenodd"/>',
+        fw, fh, fragment.rects,
+    )
+
+# WHY: Reposiciona un fragmento ya generado; se usa para alinear elementos sin regenerar la simbologia.
+def reposition_fragment(fragment: SvgFragment, x_mm: float, y_mm: float) -> SvgFragment:
+    """Reposition a fragment without re-encoding the symbol.
+
+    Barcode encoding is the expensive step in CSV batches, so alignment only
+    re-serializes the stored millimetre geometry at a new origin.
+    """
+    if not fragment.rects:
+        return fragment
+    path = rects_to_path_data(list(fragment.rects), x_mm, y_mm)
+    return SvgFragment(
+        f'<path d="{path}" fill="#000" fill-rule="nonzero"/>',
+        fragment.width_mm,
+        fragment.height_mm,
+        fragment.rects,
+    )
+
+
+# WHY: Genera Code 128 vectorial porque es el estandar inicial de nodos y mantiene lectura por escaner mas texto visible.
 def code128_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
                      bar_height_mm: float, quiet_modules: int = 10) -> SvgFragment:
     if not value:
@@ -103,10 +161,11 @@ def code128_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
     )
     width_mm = float(drawing.width / mm)
     height_mm = float(drawing.height / mm)
-    return SvgFragment(_nest_svg(renderSVG.drawToString(drawing), x_mm, y_mm, width_mm, height_mm), width_mm, height_mm)
+    rects = rects_from_drawing(drawing, float(drawing.height))
+    return _fragment_from_rects(rects, x_mm, y_mm, width_mm, height_mm)
 
 
-# WHY: Ofrece Code 39 para equipos/procesos heredados sin introducir lógica específica en el diseñador.
+# WHY: Ofrece Code 39 para equipos/procesos heredados sin introducir logica especifica en el disenador.
 def code39_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
                     bar_height_mm: float, quiet_modules: int = 10) -> SvgFragment:
     if not value:
@@ -124,10 +183,11 @@ def code39_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
     )
     width_mm = float(drawing.width / mm)
     height_mm = float(drawing.height / mm)
-    return SvgFragment(_nest_svg(renderSVG.drawToString(drawing), x_mm, y_mm, width_mm, height_mm), width_mm, height_mm)
+    rects = rects_from_drawing(drawing, float(drawing.height))
+    return _fragment_from_rects(rects, x_mm, y_mm, width_mm, height_mm)
 
 
-# WHY: Genera QR vectorial con tamaño de módulo físico, apropiado para activos leídos con cámaras o lectores 2D.
+# WHY: Genera QR vectorial con tamano de modulo fisico, apropiado para activos leidos con camaras o lectores 2D.
 def qr_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
                 quiet_modules: int = 4, error_correction: str = "M") -> SvgFragment:
     if not value:
@@ -144,29 +204,12 @@ def qr_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
     matrix = qr.get_matrix()  # Includes border requested above.
     size = len(matrix)
     width_mm = size * module_mm
-    # Build a single compound path from horizontal dark runs instead of one
-    # <rect> per module. This avoids hairline anti-alias seams in some SVG
-    # rasterizers and keeps the laser handoff compact. Adjacent dark modules in
-    # the same row become one rectangle, while the QR geometry remains exact.
-    commands: list[str] = []
+    rects: list[Rectangle] = []
     for r, row in enumerate(matrix):
-        c = 0
-        while c < size:
-            if not row[c]:
-                c += 1
-                continue
-            start = c
-            while c < size and row[c]:
-                c += 1
-            run = c - start
-            x = x_mm + start * module_mm
-            y = y_mm + r * module_mm
-            w = run * module_mm
-            h = module_mm
-            commands.append(
-                f'M {x:.4f} {y:.4f} h {w:.4f} v {h:.4f} h {-w:.4f} z'
-            )
-    return SvgFragment(f'<path d="{" ".join(commands)}" fill="#000"/>', width_mm, width_mm)
+        for c, dark in enumerate(row):
+            if dark:
+                rects.append((c * module_mm, r * module_mm, module_mm, module_mm))
+    return _fragment_from_rects(rects, x_mm, y_mm, width_mm, width_mm)
 
 
 # WHY: Genera Data Matrix compacto para piezas donde un QR resulte demasiado grande.
@@ -181,19 +224,21 @@ def datamatrix_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
     symbol_mm = symbol_modules * module_mm
     quiet_mm = quiet_modules * module_mm
     total_mm = symbol_mm + 2 * quiet_mm
-    nested = _nest_svg(
-        renderSVG.drawToString(drawing),
-        x_mm + quiet_mm,
-        y_mm + quiet_mm,
-        symbol_mm,
-        symbol_mm,
-    )
-    return SvgFragment(nested, total_mm, total_mm)
+    # WHY: El Drawing viene en unidades propias; se escala al modulo fisico pedido
+    # mediante aritmetica sobre la geometria, no mediante un transform en el archivo.
+    native = rects_from_drawing(drawing, float(drawing.height))
+    native_w = float(drawing.width / mm)
+    scale = symbol_mm / native_w if native_w else 1.0
+    scaled = [(x * scale + quiet_mm, y * scale + quiet_mm, w * scale, h * scale)
+              for x, y, w, h in native]
+    return _fragment_from_rects(scaled, x_mm, y_mm, total_mm, total_mm)
 
 
-# WHY: Genera texto vectorial posicionado en milímetros para conservar inspección visual junto al código.
+# WHY: Genera texto vectorial posicionado en milimetros para conservar inspeccion visual junto al codigo.
 def text_fragment(value: str, x_mm: float, y_mm: float, font_size_mm: float,
-                  width_mm: float | None = None, align: str = "center") -> SvgFragment:
+                  width_mm: float | None = None, align: str = "center",
+                  font_family: str = "Arial,Helvetica,sans-serif",
+                  font_weight: str = "700") -> SvgFragment:
     if align == "left":
         anchor = "start"
         x = x_mm
@@ -207,8 +252,8 @@ def text_fragment(value: str, x_mm: float, y_mm: float, font_size_mm: float,
     escaped = html.escape(value)
     return SvgFragment(
         f'<text x="{x:.4f}" y="{y_mm:.4f}" text-anchor="{anchor}" '
-        f'font-family="Arial,Helvetica,sans-serif" font-size="{font_size_mm:.4f}" '
-        f'font-weight="700" fill="#000">{escaped}</text>',
+        f'font-family="{font_family}" font-size="{font_size_mm:.4f}" '
+        f'font-weight="{font_weight}" fill="#000">{escaped}</text>',
         width_mm or 0,
         font_size_mm,
     )

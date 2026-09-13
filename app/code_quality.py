@@ -26,7 +26,7 @@ from .barcode_engine import (
     resolve_value,
 )
 from .exporters import svg_to_png
-from .models import QualityProfile, ScannerProfile, TemplateSpec
+from .models import MarkingMode, QualityProfile, ScannerProfile, TemplateSpec
 from .template_engine import apply_input_rules
 
 
@@ -60,23 +60,28 @@ _PYZBAR_TYPES = {
 
 # WHY: Reutiliza exactamente los generadores de producción y evita un cálculo de calidad desconectado del SVG real.
 def _fragment_for_element(el, quality: QualityProfile, value: str) -> SymbolGeometry:
+    # WHY (v0.7.0): El preflight debe evaluar la quiet zone que el usuario definio en
+    # el elemento, no la del perfil.  Si evaluara el perfil, un elemento con margen
+    # reducido a mano pasaria el preflight y fallaria al leerlo fisicamente: justo el
+    # escenario que esta herramienta existe para impedir.
+    override = getattr(el, "quiet_modules", None)
     if el.kind == "code128":
         module = el.module_mm or quality.code128_module_mm
-        quiet = quality.code128_quiet_modules
+        quiet = override if override is not None else quality.code128_quiet_modules
         height = el.height_mm or quality.code128_bar_height_mm
         f = code128_fragment(value, 0, 0, module, height, quiet)
     elif el.kind == "code39":
         module = el.module_mm or quality.code128_module_mm
-        quiet = quality.code128_quiet_modules
+        quiet = override if override is not None else quality.code128_quiet_modules
         height = el.height_mm or quality.code128_bar_height_mm
         f = code39_fragment(value, 0, 0, module, height, quiet)
     elif el.kind == "qr":
         module = el.module_mm or quality.qr_module_mm
-        quiet = quality.qr_quiet_modules
+        quiet = override if override is not None else quality.qr_quiet_modules
         f = qr_fragment(value, 0, 0, module, quiet, el.error_correction)
     elif el.kind == "datamatrix":
         module = el.module_mm or quality.datamatrix_module_mm
-        quiet = quality.datamatrix_quiet_modules
+        quiet = override if override is not None else quality.datamatrix_quiet_modules
         f = datamatrix_fragment(value, 0, 0, module, quiet)
     else:  # pragma: no cover - caller filters kinds
         raise ValueError(f"unsupported quality-check kind: {el.kind}")
@@ -140,6 +145,21 @@ def _profile_reference_module(kind: str, quality: QualityProfile) -> float:
 
 
 # WHY: Impide recomendar una simbología que el lector seleccionado no declara soportar.
+# WHY: Referencia de quiet zone por simbologia.  Code 128 usa 10 modulos por
+# ISO/IEC 15417, QR usa 4 por ISO/IEC 18004 y Data Matrix 1 por ISO/IEC 16022.
+# Vive junto al perfil para que un perfil mas exigente pueda subir el listado.
+def _profile_reference_quiet(kind: str, quality: QualityProfile) -> int:
+    if kind in {"code128", "code39"}:
+        return quality.code128_quiet_modules
+    if kind == "qr":
+        return quality.qr_quiet_modules
+    if kind == "datamatrix":
+        return quality.datamatrix_quiet_modules
+    return 0
+
+
+# WHY: Declara si el lector objetivo soporta la simbología, para impedir estandarizar
+# un código que el equipo del área no puede leer.
 def _scanner_support(scanner: ScannerProfile | None, kind: str) -> tuple[bool | None, str]:
     if scanner is None:
         return None, "Sin lector objetivo seleccionado"
@@ -161,6 +181,7 @@ def assess_template_codes(
     scanner: ScannerProfile | None = None,
     dpi: int | None = None,
     digital_stress: bool = True,
+    marking_mode_override: MarkingMode | None = None,
 ) -> dict[str, Any]:
     """Return per-code structural and optional decode robustness results.
 
@@ -169,6 +190,7 @@ def assess_template_codes(
     contrast of a future physical laser mark.
     """
     normalized = apply_input_rules(template, data, capture_mode=capture_mode)
+    effective_marking = marking_mode_override or template.marking_mode
     dpi = dpi or quality.render_dpi
     results: list[dict[str, Any]] = []
 
@@ -181,6 +203,9 @@ def assess_template_codes(
             "label": el.label or _SYMBOLOGY_LABELS[el.kind],
             "kind": el.kind,
             "value": value,
+            "engraving_mode": getattr(el, "engraving_mode", "positive"),
+            "polarity": effective_marking.polarity,
+            "physical_validation_required": (effective_marking.polarity == "negative" or getattr(el, "engraving_mode", "positive") == "negative_background"),
             "scanner": None,
             "checks": [],
             "digital": {"available": False, "variants": [], "passed": 0, "total": 0},
@@ -191,7 +216,20 @@ def assess_template_codes(
             results.append(item)
             continue
 
+        if effective_marking.polarity == "negative" or getattr(el, "engraving_mode", "positive") == "negative_background":
+            item["checks"].append({
+                "level": "info",
+                "message": (
+                    "Preflight POSITIVO canónico: el SVG negativo describe qué retira el láser y NO se usa como "
+                    "artefacto de lectura. La aceptación física depende del contraste final/material/acabado."
+                ),
+            })
+
         g = _fragment_for_element(el, quality, value)
+        # WHY: El preflight certifica el símbolo óptico esperado, nunca la instrucción de ablación.
+        # Un fragmento even-odd aquí indicaría que una refactorización filtró geometría negativa a la ruta de calidad.
+        if 'fill-rule="evenodd"' in g.svg:
+            raise ValueError("invariante de preflight violado: recibió geometría negativa/even-odd en lugar del símbolo positivo canónico")
         ref_module = _profile_reference_module(el.kind, quality)
         ratio = g.module_mm / ref_module if ref_module else 1.0
         item.update({
@@ -209,6 +247,22 @@ def assess_template_codes(
             item["checks"].append({"level": "warn", "message": f"Módulo {g.module_mm:.2f} mm por debajo del perfil {ref_module:.2f} mm; conserve margen antes de producción."})
         else:
             item["checks"].append({"level": "warn", "message": f"Módulo {g.module_mm:.2f} mm muy reducido frente al perfil {ref_module:.2f} mm; trátelo como frágil aunque decodifique en pantalla."})
+
+        # WHY: La quiet zone se evalua como criterio propio y no solo como un numero
+        # informativo.  Un modulo correcto con margen insuficiente produce un simbolo
+        # que decodifica en pantalla y falla sobre la pieza, porque el fondo real
+        # (carcasa, etiqueta, borde de la pieza) invade el area de silencio.
+        ref_quiet = _profile_reference_quiet(el.kind, quality)
+        if g.quiet_modules >= ref_quiet:
+            item["checks"].append({"level": "ok", "message": f"Quiet zone de {g.quiet_modules} módulos: cumple la referencia de {ref_quiet}."})
+        else:
+            item["checks"].append({
+                "level": "warn",
+                "message": (
+                    f"Quiet zone reducida a {g.quiet_modules} módulos frente a los {ref_quiet} de referencia. "
+                    "Puede ser aceptable si el área alrededor del código queda limpia, pero debe confirmarse con el lector real."
+                ),
+            })
 
         # Position uses actual symbol dimensions, not the editor's nominal bounding box.
         within = el.x_mm + g.width_mm <= template.width_mm + 0.01 and el.y_mm + g.height_mm <= template.height_mm + 0.01
@@ -277,6 +331,8 @@ def assess_template_codes(
     order = {"ROBUSTO": 0, "ACEPTABLE": 1, "FRAGIL": 2, "NO_LEGIBLE": 3}
     overall = max((r["classification"] for r in results), key=lambda x: order[x], default="SIN_CODIGOS")
     return {
+        "preflight_geometry": "positive_canonical",
+        "requested_marking_mode": effective_marking.model_dump(),
         "overall": overall,
         "results": results,
         "notes": [
