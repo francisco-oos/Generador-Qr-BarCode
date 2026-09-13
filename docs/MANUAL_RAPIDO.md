@@ -1,4 +1,4 @@
-# Manual rápido — Server Oficina Marking Studio 0.6.1
+# Manual rápido — Server Oficina Marking Studio 0.6.2
 
 Pensado para un operador que conoce el equipo, pero no necesita saber programación, SVG o GRBL.
 
@@ -115,3 +115,28 @@ Use **Calibración** con material de sacrificio. Genere P0/PX/PY, haga Frame, mi
 Un trabajo sólo se libera cuando se cumplen las tres:
 
 **ID correcto + grabado visible + lectura correcta.**
+## 13. Probar que el QR/barcode realmente se lea antes de grabar
+
+En **Generador** o **Estudio visual**, seleccione el lector que usará en campo y pulse **Probar legibilidad / Probar código**.
+
+El sistema revisa:
+
+- dato exacto que contiene el símbolo;
+- módulo físico y tamaño real en milímetros;
+- que el código no salga del área de la plantilla;
+- que el lector seleccionado declare la simbología;
+- una simulación digital con reducción, desenfoque, contraste, rotación y abrasión ligera cuando el decodificador está disponible.
+
+Resultados:
+
+- **ROBUSTO**: buen margen digital y geométrico;
+- **ACEPTABLE**: válido, pero con menor margen;
+- **FRÁGIL**: puede leer en pantalla y fallar al imprimir/grabar; aumente módulo/tamaño o mejore contraste;
+- **NO LEGIBLE**: no liberar a producción.
+
+Importante: el **Lienzo de edición NO es escaneable**. Es sólo una representación para mover objetos. La **Vista real SVG de producción sí es el código real**.
+
+Al imprimir una prueba en papel o importar a LightBurn/Sculpfun Space, conserve **100 % del tamaño físico**. La opción “Ajustar a página” puede adelgazar las barras y convertir un código correcto en uno frágil.
+
+La prueba definitiva sigue siendo: grabar sobre material equivalente y leer varias veces con el lector real desde distintas posiciones.
+

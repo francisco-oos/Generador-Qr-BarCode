@@ -10,5 +10,15 @@ if [ ! -d .venv ]; then "$PYTHON_BIN" -m venv .venv; fi
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+# pyzbar is optional at runtime but enables the in-app digital scan stress test.
+# On Debian/Ubuntu its native zbar library may need to be installed once.
+python - <<'PYZ'
+try:
+    from pyzbar.pyzbar import decode  # noqa: F401
+    print("[Marking Studio] Verificador digital QR/barcode: disponible")
+except Exception as exc:
+    print("[Marking Studio] AVISO: verificador digital opcional no disponible:", exc)
+    print("  Debian/Ubuntu: sudo apt install libzbar0")
+PYZ
 python -m compileall -q app scripts
 echo "Instalación completada. Ejecute ./run_linux.sh"

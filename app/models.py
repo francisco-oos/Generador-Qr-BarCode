@@ -242,6 +242,17 @@ class TemplatePreviewRequest(BaseModel):
 
 
 # WHY: Solicita un SVG por registro para escenarios sin jig o composición posterior en el software de la máquina.
+
+
+# WHY: Solicita una evaluación de legibilidad sobre una plantilla guardada o borrador visual sin controlar el láser.
+class CodeQualityCheckRequest(BaseModel):
+    template: TemplateSpec
+    data: dict[str, str] = Field(default_factory=dict)
+    capture_mode: Literal["manual", "import"] = "manual"
+    scanner_profile_id: str | None = None
+    dpi: int | None = Field(default=None, ge=150, le=2400)
+    digital_stress: bool = True
+
 class BulkTemplateExportRequest(BaseModel):
     """Export one SVG per row using a saved template.
 

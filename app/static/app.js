@@ -7,7 +7,7 @@
  * cada cambio. Ninguna función de este archivo transmite movimiento, potencia ni encendido al láser.
  */
 /** WHY: Estado efímero de la sesión web; evita variables globales dispersas y nunca sustituye al histórico SQLite. */
-const state = { catalog:null, csvRows:[], csvHeaders:[], assignments:[], lastSvg:'', lastTemplate:null, machineCaptures:null, lightburnArtifacts:[], lasergrblArtifacts:[], materialReference:null, calibration:null, designerTemplate:null, designerSelected:-1, designerScale:1, designerPreviewTimer:null, individualPreviewTimer:null, batchExported:false };
+const state = { catalog:null, csvRows:[], csvHeaders:[], assignments:[], lastSvg:'', lastTemplate:null, machineCaptures:null, lightburnArtifacts:[], lasergrblArtifacts:[], materialReference:null, calibration:null, designerTemplate:null, designerSelected:-1, designerScale:1, designerPreviewTimer:null, individualPreviewTimer:null, batchExported:false, lastQuality:null };
 /** WHY: Acceso DOM corto y centralizado para mantener legibles los flujos del operador. */
 const $ = (id)=>document.getElementById(id);
 /** WHY: Escapa texto antes de insertarlo en HTML generado y evita que datos del CSV se interpreten como marcado. */
@@ -42,6 +42,13 @@ function sourceFields(template){ const expected=(template.expected_fields||[]).f
 function selectedTemplate(selectId){ return state.catalog.templates.find(t=>t.id===$(selectId).value); }
 /** WHY: Rellena selectores desde configuración dinámica y evita duplicar renderizado de catálogos. */
 function fillSelect(el, items, label=(x)=>x.name){ el.innerHTML=items.map(x=>`<option value="${esc(x.id)}">${esc(label(x))}</option>`).join(''); }
+/** WHY: Los lectores provienen del catálogo; la UI no fija una marca/modelo en código y recuerda la elección del operador. */
+function fillScannerSelect(el){
+  if(!el)return; const remembered=localStorage.getItem('markingScannerId')||'';
+  el.innerHTML='<option value="">— sin lector específico —</option>'+(state.catalog.scanners||[]).map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('');
+  if(remembered && [...el.options].some(o=>o.value===remembered)) el.value=remembered;
+  el.addEventListener('change',()=>{ if(el.value)localStorage.setItem('markingScannerId',el.value); else localStorage.removeItem('markingScannerId'); });
+}
 
 /** WHY: Resume capacidades disponibles en la portada para que el operador confirme de un vistazo que la estación cargó catálogo, máquina y lector. */
 function renderHomeStatus(){
@@ -56,7 +63,7 @@ async function loadAll(){
   if(!lic.valid) return;
   state.catalog=await (await api('/api/catalog')).json();
   ['individualTemplate','batchTemplate','configTemplate'].forEach(id=>fillSelect($(id),state.catalog.templates));
-  fillSelect($('configJig'),state.catalog.jigs,x=>`${x.name} · ${x.capacity} pos.`); fillSelect($('designerQuality'),state.catalog.quality_profiles);
+  fillSelect($('configJig'),state.catalog.jigs,x=>`${x.name} · ${x.capacity} pos.`); fillSelect($('designerQuality'),state.catalog.quality_profiles); fillScannerSelect($('individualScanner')); fillScannerSelect($('designerScanner'));
   fillSelect($('machineImportProfile'),state.catalog.machines); fillSelect($('shopPresetMachine'),state.catalog.machines); fillSelect($('calibrationJig'),state.catalog.jigs,x=>`${x.name} · ${x.capacity} pos.`);
   renderMachineCards(); renderScannerCards(); renderIndividualFields(); updateBatchJigs(); loadConfigEditors(); initVisualDesigner(); renderHomeStatus(); updateBatchStepper();
   await loadMachineCaptures(); await refreshPorts();
@@ -65,6 +72,27 @@ async function loadAll(){
 function renderMachineCards(){ $('machinesList').innerHTML=state.catalog.machines.map(m=>`<div class="machine-card"><strong>${esc(m.name)}</strong><div>${esc(m.controller)} · ${m.bed_width_mm}×${m.bed_height_mm} mm · ${esc(m.connection)}</div><div class="muted">Vector: ${esc(m.vector_formats.join(', '))}</div><div class="muted">Salida directa: ${m.direct_machine_output_enabled?'sí':'no (handoff seguro)'}</div></div>`).join(''); }
 /** WHY: Muestra simbologías del lector para que el operador sepa qué diseños puede validar físicamente. */
 function renderScannerCards(){ $('scannersList').innerHTML=(state.catalog.scanners||[]).map(s=>`<div class="machine-card"><strong>${esc(s.name)}</strong><div>${esc(s.technology)} · ${esc(s.interfaces.join(', '))}</div><div class="muted">${esc(s.symbologies.join(', '))}</div><div class="muted">QR: ${s.supports_qr?'sí':'no'} · Data Matrix: ${s.supports_datamatrix?'sí':'no'}</div></div>`).join(''); }
+/** WHY: Traduce el preflight técnico a una lectura rápida sin ocultar las comprobaciones que sustentan el resultado. */
+function renderQualityResult(target, report){
+  const host=$(target); if(!host)return; state.lastQuality=report;
+  const overall=report.overall||'SIN_CODIGOS'; const cls=overall==='ROBUSTO'?'ok':overall==='ACEPTABLE'?'ok':overall==='FRAGIL'?'warn':'bad';
+  const label={ROBUSTO:'ROBUSTO',ACEPTABLE:'ACEPTABLE',FRAGIL:'FRÁGIL',NO_LEGIBLE:'NO LEGIBLE',SIN_CODIGOS:'SIN CÓDIGOS'}[overall]||overall;
+  let html=`<div class="quality-summary ${cls}"><strong>Calidad estimada: ${esc(label)}</strong><span>Preflight digital; la prueba física sigue siendo obligatoria.</span></div>`;
+  for(const r of report.results||[]){
+    const rcls=r.classification==='ROBUSTO'||r.classification==='ACEPTABLE'?'ok':r.classification==='FRAGIL'?'warn':'bad';
+    const digital=r.digital?.available?`${r.digital.passed}/${r.digital.total} pruebas digitales`:(r.digital?.note||'sin decodificador digital');
+    html+=`<article class="quality-card ${rcls}"><div class="panel-head"><strong>${esc(r.label)} · ${esc(r.kind)}</strong><span>${esc(r.classification)}</span></div><div class="quality-metrics"><span>Dato: <b>${esc(r.value)}</b></span><span>Módulo: <b>${r.module_mm??'—'} mm</b></span><span>Tamaño real: <b>${r.symbol_width_mm??'—'} × ${r.symbol_height_mm??'—'} mm</b></span><span>${esc(digital)}</span></div><ul>${(r.checks||[]).map(c=>`<li class="${esc(c.level)}">${esc(c.message)}</li>`).join('')}</ul>${r.digital?.available?`<details><summary>Ver degradaciones simuladas</summary><div class="variant-grid">${r.digital.variants.map(v=>`<span class="${v.pass?'ok':'bad'}">${esc(v.name)}: ${v.pass?'PASS':'FAIL'}</span>`).join('')}</div></details>`:''}</article>`;
+  }
+  html+=`<div class="messages">${(report.notes||[]).map(n=>`<div class="msg warn">${esc(n)}</div>`).join('')}</div>`; host.innerHTML=html;
+}
+/** WHY: Ejecuta una comprobación independiente de legibilidad antes del handoff al software de la máquina. */
+async function runCodeQuality(template,data,scannerId,target){
+  const host=$(target); host.innerHTML='<div class="msg">Evaluando geometría, lector y degradaciones digitales…</div>';
+  try{
+    const r=await api('/api/quality/check',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template,data,capture_mode:'manual',scanner_profile_id:scannerId||null,digital_stress:true})});
+    renderQualityResult(target,await r.json());
+  }catch(e){host.innerHTML='';msg(host,e.message,'bad');}
+}
 
 /** WHY: Construye captura manual desde los campos/reglas de la plantilla, incluida la ayuda de prefijos. */
 function renderIndividualFields(){
@@ -78,10 +106,11 @@ $('individualTemplate').addEventListener('change',renderIndividualFields);
 /** WHY: Agrupa pulsaciones rápidas antes de renderizar para ofrecer preview vivo sin saturar el backend con una petición por tecla. */
 function scheduleIndividualPreview(){clearTimeout(state.individualPreviewTimer);state.individualPreviewTimer=setTimeout(renderIndividual,160);}
 /** WHY: Renderiza la vista previa individual con el mismo motor SVG que luego se exporta. */
-async function renderIndividual(){ const t=selectedTemplate('individualTemplate'); const data={}; $('individualFields').querySelectorAll('input').forEach(i=>data[i.dataset.field]=i.value.trim()); clear($('renderWarnings')); try{ const r=await api('/api/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template_id:t.id,data,capture_mode:'manual',output:'svg'})}); const j=await r.json(); state.lastSvg=j.svg; $('preview').innerHTML=j.svg; $('markSize').textContent=`${j.width_mm} × ${j.height_mm} mm`; j.warnings.forEach(w=>msg($('renderWarnings'),w,'warn')); if(j.calibration_required) msg($('renderWarnings'),'Plantilla pendiente de calibración física antes de producción.','warn'); }catch(e){msg($('renderWarnings'),e.message,'bad');}}
+async function renderIndividual(){ const t=selectedTemplate('individualTemplate'); const data={}; $('individualFields').querySelectorAll('input').forEach(i=>data[i.dataset.field]=i.value.trim()); clear($('renderWarnings')); if($('individualQualityResult'))$('individualQualityResult').innerHTML=''; try{ const r=await api('/api/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template_id:t.id,data,capture_mode:'manual',output:'svg'})}); const j=await r.json(); state.lastSvg=j.svg; $('preview').innerHTML=j.svg; $('markSize').textContent=`${j.width_mm} × ${j.height_mm} mm`; j.warnings.forEach(w=>msg($('renderWarnings'),w,'warn')); if(j.calibration_required) msg($('renderWarnings'),'Plantilla pendiente de calibración física antes de producción.','warn'); }catch(e){msg($('renderWarnings'),e.message,'bad');}}
 $('renderBtn').addEventListener('click',renderIndividual);
 $('downloadSvgBtn').addEventListener('click',()=>{ if(state.lastSvg) downloadBlob(new Blob([state.lastSvg],{type:'image/svg+xml'}),`${$('individualTemplate').value}.svg`); });
 $('downloadPngBtn').addEventListener('click',async()=>{ const t=selectedTemplate('individualTemplate'); const data={}; $('individualFields').querySelectorAll('input').forEach(i=>data[i.dataset.field]=i.value.trim()); try{ const r=await api('/api/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({template_id:t.id,data,capture_mode:'manual',output:'png',dpi:600})}); downloadBlob(await r.blob(),`${t.id}-600dpi.png`);}catch(e){msg($('renderWarnings'),e.message,'bad');} });
+$('individualQualityBtn').addEventListener('click',()=>{const t=selectedTemplate('individualTemplate');const data={};$('individualFields').querySelectorAll('input').forEach(i=>data[i.dataset.field]=i.value.trim());runCodeQuality(t,data,$('individualScanner').value,'individualQualityResult');});
 
 /** WHY: Precarga serie/prefijo desde la plantilla para reducir errores de captura sin imponerlos al CSV. */
 function updateSeriesDefaultsFromTemplate(){const t=selectedTemplate('batchTemplate');if(!t)return;const field=primaryIdentityField(t)||sourceFields(t)[0]||'';const rule=(t.input_rules||[]).find(r=>r.field===field);$('seriesField').value=field;$('seriesPrefix').value=rule?.manual_prefix_enabled?rule.manual_prefix:'';$('seriesSuffix').value=rule?.manual_suffix_enabled?rule.manual_suffix:'';}
@@ -180,7 +209,7 @@ function safeDesignerId(value){return String(value||'').trim().replace(/[^A-Za-z
 /** WHY: Crea el borrador mínimo de una plantilla nueva sin imponer un tipo de equipo. */
 function blankDesignerTemplate(){
   const quality=state.catalog?.quality_profiles?.[0]?.id||'rugged_field_v1';
-  return {id:`custom_${Date.now()}`,name:'Nueva plantilla',version:'1.0',category:'custom',description:'Plantilla creada desde el estudio visual',width_mm:50,height_mm:25,quality_profile:quality,calibration_required:true,expected_fields:['value'],input_rules:[],elements:[],metadata:{primary_identity_field:'value',example_data:{value:'EJEMPLO'},created_with:'visual_designer_v0.6.1'}};
+  return {id:`custom_${Date.now()}`,name:'Nueva plantilla',version:'1.0',category:'custom',description:'Plantilla creada desde el estudio visual',width_mm:50,height_mm:25,quality_profile:quality,calibration_required:true,expected_fields:['value'],input_rules:[],elements:[],metadata:{primary_identity_field:'value',example_data:{value:'EJEMPLO'},created_with:'visual_designer_v0.6.2'}};
 }
 /** WHY: Obtiene los campos actuales del borrador para alimentar propiedades, reglas y preview. */
 function designerFields(){return [...new Set((state.designerTemplate?.expected_fields||[]).filter(Boolean))];}
@@ -308,7 +337,7 @@ function updateSelectedElementFromProperties(){
 /** WHY: Recoge datos de ejemplo usados sólo para visualizar el resultado real de la plantilla. */
 function designerData(){const data={};$('designerDataFields').querySelectorAll('[data-designer-field]').forEach(i=>data[i.dataset.designerField]=i.value);return data;}
 /** WHY: Agrupa cambios rápidos antes de llamar al backend y evita renders excesivos durante arrastre/escritura. */
-function scheduleDesignerPreview(){clearTimeout(state.designerPreviewTimer);state.designerPreviewTimer=setTimeout(renderDesignerPreview,140);}
+function scheduleDesignerPreview(){clearTimeout(state.designerPreviewTimer);if($('designerQualityResult'))$('designerQualityResult').innerHTML='';state.designerPreviewTimer=setTimeout(renderDesignerPreview,140);}
 /** WHY: Solicita al backend el SVG real del borrador para que la vista final no difiera del motor productivo. */
 async function renderDesignerPreview(){
   const t=state.designerTemplate;if(!t)return;syncDesignerHeaderToDraft();clear($('designerWarnings'));
@@ -337,6 +366,7 @@ function initVisualDesigner(){
   $('newTemplateBtn').addEventListener('click',()=>loadDesignerFromTemplate(blankDesignerTemplate()));
   $('duplicateTemplateBtn').addEventListener('click',()=>{const t=deepClone(state.designerTemplate||blankDesignerTemplate());t.id=`${safeDesignerId(t.id)}_copy_${Date.now().toString().slice(-5)}`;t.name=`${t.name} — copia`;loadDesignerFromTemplate(t);});
   $('saveVisualTemplateBtn').addEventListener('click',saveVisualTemplate);
+  $('designerQualityBtn').addEventListener('click',()=>{syncDesignerHeaderToDraft();runCodeQuality(state.designerTemplate,designerData(),$('designerScanner').value,'designerQualityResult');});
   ['designerName','designerId','designerCategory','designerWidth','designerHeight','designerQuality'].forEach(id=>$(id).addEventListener('input',()=>{syncDesignerHeaderToDraft();renderDesignerCanvas();scheduleDesignerPreview();}));
   $('designerPrimaryField').addEventListener('change',()=>{syncDesignerHeaderToDraft();updateDesignerJson();});
   $('designerAddFieldBtn').addEventListener('click',()=>{const f=safeDesignerId($('designerNewField').value).replace(/-/g,'_');if(!f)return;if(!state.designerTemplate.expected_fields.includes(f))state.designerTemplate.expected_fields.push(f);state.designerTemplate.metadata.example_data=state.designerTemplate.metadata.example_data||{};state.designerTemplate.metadata.example_data[f]='';$('designerNewField').value='';renderDesignerFields();renderDesignerProperties();updateDesignerJson();scheduleDesignerPreview();});

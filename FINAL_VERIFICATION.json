@@ -1,53 +1,66 @@
 {
   "project": "Server Oficina Marking Studio",
-  "version": "0.6.1",
-  "generated_at_utc": "2026-09-12T16:14:29.611440+00:00",
+  "version": "0.6.2",
+  "generated_at_utc": "2026-09-13T00:08:12.379089+00:00",
   "status": "PASS_SOFTWARE_READY_FOR_CONTROLLED_PHYSICAL_PILOT",
   "scope": {
-    "maintainability": "PASS — comentarios WHY junto a responsabilidades Python/JavaScript + guías de revisión/mantenimiento",
-    "ux_flow": "PASS — Inicio por tareas, navegación Operación/Diseño/Control, modo guiado/experto, preview vivo, stepper y capas",
-    "visual_template_studio": "PASS — click + drag/drop, geometría mm, selección por canvas/capas, preview SVG del motor productivo",
-    "csv_flexibility": "PASS — auto/forced headers, listas sin encabezado de una columna, mapeo multicolumna y aliases por plantilla",
-    "hardcoding_reduction": "PASS — identidad/prefijo/sufijo/CSV aliases/elementos permanecen en plantilla/configuración",
-    "bulk_generation": "PASS — un SVG por fila hasta 10000/request; probado 1000 y 5000",
-    "machine_boundary": "PASS — handoff documental; sin streaming productivo, movimiento ni potencia",
-    "shop_settings": "PASS — captura/importación read-only LightBurn/LaserGRBL/GRBL",
-    "calibration": "PASS — SVG/evaluación P0/PX/PY; aprobación física sigue requerida",
-    "scanner_profile": "PASS — Steren COM-597 y compatibilidad 1D heredada documentadas"
+    "scan_quality_preflight": "PASS — geometry + scanner capability + optional digital stress decoding; physical acceptance remains authoritative",
+    "maintainability": "PASS — WHY comments + regenerated code review guide + maintainer invariants",
+    "ux_flow": "PASS — edit canvas explicitly non-scannable; production SVG explicitly scannable; guided/expert flows retained",
+    "visual_template_studio": "PASS — drag/drop, mm geometry, live production preview, per-code quality test",
+    "csv_flexibility": "PASS — auto/forced/no headers, one-column lists, user field mapping",
+    "hardcoding_reduction": "PASS — templates/jigs/scanners/quality/input rules remain configuration-driven",
+    "bulk_generation": "PASS — 1000 automated test and independent 5000-row export; max 10000/request",
+    "machine_boundary": "PASS — no production streaming; handoff to LightBurn/Sculpfun Space/LaserGRBL",
+    "shop_settings": "PASS — read-only import/capture of LightBurn/LaserGRBL/GRBL settings",
+    "calibration": "PASS — P0/PX/PY geometry and calibration-only SVG",
+    "scanner_profile": "PASS — Steren COM-597 profile used by preflight; scanner selection is catalog-driven"
   },
   "qa": {
-    "pytest": "55/55 PASS",
+    "pytest": "59/59 PASS",
     "python_compileall": "PASS",
     "javascript_node_check": "PASS",
     "documentation_contract": "PASS",
     "ux_contract": "PASS",
     "compatibility_check": "PASS",
+    "quality_preflight": {
+      "status": "PASS",
+      "inova": "ROBUSTO 7/7",
+      "sercel": "ROBUSTO 7/7",
+      "phone_qr": "ROBUSTO 6/7",
+      "undersized_control": "FRAGIL"
+    },
     "scan_simulation": "28/28 PASS",
     "inova_3x4_decode": "12/12 PASS",
     "svg_interop": "PASS (XML + svglib + Inkscape)",
     "configuration_importers": "4/4 PASS",
     "grbl_readonly_simulator": "PASS — only $I and $$",
+    "bulk_svg_5000": "PASS — 5000 SVG, ~5.29 MB ZIP, ~10.35 s on validation host",
     "benchmark": {
       "records_input": 1200,
       "jig_capacity": 12,
       "batches_for_1200": 100,
-      "individual_render_2500_seconds": 5.034,
-      "individual_render_2500_per_second": 496.6,
+      "individual_render_2500_seconds": 4.97,
+      "individual_render_2500_per_second": 503.0,
       "process_peak_rss_delta_mib": 5.62,
       "checksum": 16219920,
-      "batch_vector_render_1200_seconds": 2.407,
+      "batch_vector_render_1200_seconds": 2.353,
       "batch_records_produced": 1200,
-      "last_full_bed_png_300dpi_seconds": 5.644,
+      "last_full_bed_png_300dpi_seconds": 5.334,
       "last_full_bed_png_bytes": 175034,
       "status": "PASS"
     },
-    "browser_e2e": "SKIP_POLICY — Chromium localhost blocked by runtime; API/HTML fallback PASS"
+    "browser_e2e": "SKIP_POLICY — API/HTML fallback PASS including quality preflight"
+  },
+  "field_observation": {
+    "printed_sheet_photo": "Independent photo decode recovered TEL-0037 (QR) and 4281847 (Code 128). Other visible symbols are not declared PASS from the photo and require the physical Steren test.",
+    "interpretation": "Confirms digital generator works through print/photo for at least one QR and one Code128; also demonstrates why physical scanner/scale/contrast remain required."
   },
   "platform_validation": {
     "executed_host": "Linux 6.18.35 / Python 3.13.5",
     "launchers_present": "Windows/Linux/macOS PASS",
-    "cross_platform_note": "Source/config/launcher compatibility is checked here; Windows/macOS execution requires a real host or CI runner."
+    "cross_platform_note": "Source/config/launcher compatibility checked here; Windows/macOS execution requires real host/CI. pyzbar may need native zbar on Linux/macOS."
   },
-  "package_reextract_validation": "PASS — draft archive re-extracted in a clean directory; 170 packaged files verified by SHA-256 manifest; compileall, JavaScript syntax, 55/55 pytest and browser API/HTML fallback passed from the extracted package.",
-  "physical_limits": "Laser/material/focus/contrast/jig repeatability are not digitally certified. Use the documented physical acceptance plan and shop-validated presets."
+  "package_reextract_validation": "PASS — candidate archive re-extracted cleanly; 176 packaged files matched SHA-256 manifest; compileall, JavaScript syntax, 59/59 pytest and API/HTML browser fallback including quality preflight passed from extracted package.",
+  "physical_limits": "Laser/material/focus/contrast/jig repeatability are not digitally certified. Use physical acceptance plan and shop-validated presets."
 }

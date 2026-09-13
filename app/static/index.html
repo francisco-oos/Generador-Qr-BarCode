@@ -10,7 +10,7 @@
   <header class="topbar">
     <div>
       <div class="eyebrow">SERVER OFICINA</div>
-      <h1>Marking Studio <span class="version">v0.6.1</span></h1>
+      <h1>Marking Studio <span class="version">v0.6.2</span></h1>
       <p>Identificación física estandarizada · QR · Code 128 · Data Matrix · lotes CSV</p>
     </div>
     <div class="top-actions"><div class="mode-switch" aria-label="Modo de experiencia"><button id="guidedModeBtn" class="mode active">Modo guiado</button><button id="expertModeBtn" class="mode">Modo experto</button></div><div id="licenseBadge" class="badge">Cargando licencia…</div></div>
@@ -68,8 +68,11 @@
           <div id="renderWarnings" class="messages"></div>
         </article>
         <article class="panel preview-panel">
-          <div class="panel-head"><h2>Vista previa</h2><span id="markSize" class="muted"></span></div>
+          <div class="panel-head"><h2>Vista real de producción</h2><span id="markSize" class="muted"></span></div>
           <div id="preview" class="preview"><span class="muted">Seleccione plantilla y datos.</span></div>
+          <p class="hint"><strong>ESCANEABLE:</strong> esta vista usa el mismo SVG que se exporta. No permita que otro programa reduzca o estire el archivo; importe/grabe a tamaño físico 100%.</p>
+          <div class="inline quality-toolbar"><label>Lector objetivo<select id="individualScanner"></select></label><button id="individualQualityBtn" class="secondary">Probar legibilidad</button></div>
+          <div id="individualQualityResult" class="quality-results"></div>
           <p class="hint">El SVG es el formato recomendado para LightBurn o Sculpfun Space. El PNG a 600 DPI es una alternativa raster para LaserGRBL.</p>
         </article>
       </div>
@@ -192,12 +195,15 @@
         </aside>
 
         <article class="panel designer-stage-panel">
-          <div class="panel-head"><h2>Lienzo de plantilla</h2><span id="designerSizeLabel" class="muted"></span></div>
+          <div class="panel-head"><h2>Lienzo de edición</h2><span id="designerSizeLabel" class="muted"></span></div>
+          <div class="edit-only-banner">Representación para mover/ordenar objetos — <strong>NO escaneable</strong></div>
           <div class="designer-canvas-wrap"><div id="designerCanvas" class="designer-canvas"></div></div>
-          <p class="hint">Arrastre objetos para moverlos. El borde azul es sólo de edición y no se exporta. Use las propiedades para medidas exactas.</p>
-          <div class="panel-head section-gap"><h2>Vista real SVG</h2><span class="muted">render del mismo motor de producción</span></div>
+          <p class="hint">Arrastre objetos para moverlos. Los barcode/QR dibujados aquí son ayudas visuales de edición; el borde azul tampoco se exporta.</p>
+          <div class="panel-head section-gap"><h2>Vista real SVG de producción</h2><span class="status-ok">ESCANEABLE · mismo motor de exportación</span></div>
           <div id="designerDataFields" class="form-grid compact"></div>
           <div id="designerPreview" class="preview designer-real-preview"><span class="muted">Seleccione o cree una plantilla.</span></div>
+          <div class="inline quality-toolbar"><label>Lector objetivo<select id="designerScanner"></select></label><button id="designerQualityBtn" class="secondary">Probar código</button></div>
+          <div id="designerQualityResult" class="quality-results"></div>
           <div id="designerWarnings" class="messages"></div>
         </article>
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.2 — 2026-09-12
+
+- Añadido preflight de legibilidad `/api/quality/check` para plantillas guardadas o borradores del diseñador.
+- Clasificación por código: ROBUSTO / ACEPTABLE / FRÁGIL / NO LEGIBLE.
+- Validación de módulo físico contra el perfil de calidad, límites del lienzo y simbología declarada por el lector seleccionado.
+- Prueba digital opcional de rasterización + decodificación exacta bajo reducción, blur, contraste, rotación y abrasión fina.
+- `pyzbar` pasa a dependencia de runtime opcional-funcional; si `libzbar` no está disponible la app continúa con análisis geométrico y lo reporta claramente.
+- El lienzo visual se identifica como representación NO escaneable; la Vista real SVG se identifica como el render productivo ESCANEABLE.
+- Generador individual y Estudio visual incorporan selector de lector y botón de prueba de legibilidad.
+- Advertencias automáticas al usar módulos inferiores al perfil conservador.
+- Documentado el riesgo de reescalado al imprimir/importar: SVG debe mantenerse a 100 % de tamaño físico.
+- Añadidas pruebas unitarias/API/UX del nuevo preflight; suite total: 59 pruebas automatizadas.
+- Evidencia de campo inicial: fotografía de hoja impresa decodificó `TEL-0037` (QR) y `4281847` (Code 128); confirmación de `Q00525499` queda reservada al lector físico.
+
 ## 0.6.1 — 2026-09-12
 
 - Auditoría de mantenibilidad: comentarios `WHY:` junto a todas las funciones/clases Python y funciones JavaScript nombradas, explicando intención y límites.

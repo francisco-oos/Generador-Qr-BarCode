@@ -1,4 +1,4 @@
-# UX y flujo operativo — Marking Studio v0.6.1
+# UX y flujo operativo — Marking Studio v0.6.2
 
 ## Objetivo de la interfaz
 

@@ -15,7 +15,8 @@ Dependencias Python principales declaradas por el proyecto y licencia reportada 
 | svglib | 1.6.0 | LGPL-3.0-or-later |
 | cryptography | 46.0.4 | Apache-2.0 OR BSD-3-Clause |
 | python-multipart | 0.0.29 | Apache-2.0 |
+| pyzbar | 0.1.9 | MIT |
 
-Dependencias sólo de QA incluyen pyzbar (MIT), OpenCV Python Headless (Apache-2.0), HTTPX (BSD-3-Clause) y pytest (MIT en la versión validada).
+Dependencias sólo de QA incluyen OpenCV Python Headless (Apache-2.0), HTTPX (BSD-3-Clause) y pytest (MIT en la versión validada). `pyzbar` pasó a runtime para habilitar el preflight digital; su librería nativa `zbar` puede requerir instalación del sistema en Linux/macOS.
 
 La tabla es un inventario técnico, no sustituye conservar los avisos/licencias exigidos por cada dependencia si el producto se distribuye comercialmente. Antes de una distribución externa o empaquetado binario conviene generar un bundle completo de notices/licencias desde el entorno de build.

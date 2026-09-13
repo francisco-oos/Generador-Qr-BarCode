@@ -48,6 +48,12 @@ def package_versions():
         m = importlib.import_module(module)
         result[module] = getattr(m, "__version__", getattr(m, "VERSION", "installed"))
     try:
+        from pyzbar.pyzbar import decode as _decode  # noqa: F401
+        result["pyzbar"] = "available (digital barcode/QR preflight enabled)"
+    except Exception as exc:
+        # Structural checks remain available; absence of native zbar is reported, not hidden.
+        result["pyzbar"] = f"unavailable; structural preflight only: {exc}"
+    try:
         m = importlib.import_module("serial")
         result["serial"] = getattr(m, "__version__", "installed")
     except ModuleNotFoundError:

@@ -1,4 +1,4 @@
-# Reporte de pruebas — Server Oficina Marking Studio v0.6.1
+# Reporte de pruebas — Server Oficina Marking Studio v0.6.2
 
 Fecha de cierre: 2026-09-12
 
@@ -6,16 +6,16 @@ Fecha de cierre: 2026-09-12
 
 **Estado de software: PASS / listo para piloto físico controlado.**
 
-La v0.6.1 conserva el Estudio visual de marcado, CSV/listas flexibles y exportación masiva de SVG sin cambiar el límite de seguridad: Marking Studio genera diseño y trazabilidad; el software de la grabadora continúa controlando movimiento, potencia y disparo.
+La v0.6.2 conserva el Estudio visual de marcado, CSV/listas flexibles y exportación masiva de SVG sin cambiar el límite de seguridad: Marking Studio genera diseño y trazabilidad; el software de la grabadora continúa controlando movimiento, potencia y disparo.
 
 ## Matriz final
 
 | Prueba | Resultado |
 |---|---|
-| Pytest | **55/55 PASS** |
+| Pytest | **59/59 PASS** |
 | `compileall` | **PASS** |
 | JavaScript `node --check` | **PASS** |
-| API `/api/health` | **PASS · v0.6.1** |
+| API `/api/health` | **PASS · v0.6.2** |
 | Catálogo/configuración | **PASS** |
 | Render de todas las plantillas guardadas | **PASS** |
 | Preview de plantilla visual no persistida | **PASS** |
@@ -36,6 +36,21 @@ La v0.6.1 conserva el Estudio visual de marcado, CSV/listas flexibles y exportac
 | Benchmark 1,200 registros / 2,500 renders | **PASS** |
 | UI navegador real | **SKIP_POLICY** |
 | Fallback API/HTML de UI | **PASS** |
+
+
+## Preflight de legibilidad v0.6.2
+
+Se añadió una ruta independiente `/api/quality/check` que acepta incluso una plantilla visual todavía no guardada. Las pruebas verifican:
+
+- Code 128 INOVA `Q00525499` con Steren COM-597: geometría robusta y lectura digital original correcta;
+- QR de teléfono: lectura digital correcta y compatibilidad declarada con COM-597;
+- un módulo Code 128 deliberadamente reducido a 0.12 mm queda clasificado como frágil/advertido;
+- UI distingue explícitamente lienzo **NO escaneable** de Vista real SVG **ESCANEABLE**;
+- Generador y diseñador exponen selector de lector y botón de prueba.
+
+En la corrida final del preflight, `Q00525499` obtuvo 7/7 degradaciones digitales, `4281847` 7/7 y el QR de teléfono 6/7; todos mantienen lectura original exacta. La clasificación no sustituye la prueba física.
+
+Como evidencia de campo inicial, una fotografía de una hoja impresa permitió recuperar independientemente `TEL-0037` (QR) y `4281847` (Code 128). Otros símbolos visibles en las fotografías no se declararon PASS desde imagen; esto refuerza la necesidad de comprobarlos con el Steren sobre la hoja física y de evitar reescalado automático al imprimir.
 
 ## Pruebas específicas del Estudio visual
 
@@ -85,7 +100,7 @@ Los defaults de serie INOVA también dejaron de estar en el HTML: campo, prefijo
 Pruebas:
 
 - 1,000 registros: **PASS**, 1,000 SVG presentes y contenido validado;
-- 5,000 registros: **PASS**, ~5.29 MB de ZIP en este dataset; ejecución observada ~12.3 s en el host de prueba, con pico RSS ~195 MB.
+- 5,000 registros: **PASS**, ~5.29 MB de ZIP en este dataset; última ejecución observada ~10.35 s en el host de prueba.
 
 El límite por solicitud es 10,000 filas para evitar trabajos no acotados. Para producción con jig se mantiene el fraccionamiento por capacidad física.
 
@@ -112,10 +127,10 @@ Además se generó `samples/output/visual_designer_composite.svg` y PNG 600 DPI 
 - registros: 1,200;
 - jig: 12;
 - cargas: 100;
-- 2,500 renders individuales: ~5.03 s;
-- ~496.6 marcas/s en este host;
-- batch vectorial de 1,200: ~2.41 s;
-- PNG de última cama 300 DPI: ~5.64 s;
+- 2,500 renders individuales: ~4.97 s;
+- ~503.0 marcas/s en este host;
+- batch vectorial de 1,200: ~2.35 s;
+- PNG de última cama 300 DPI: ~5.33 s;
 - estado: **PASS**.
 
 Estas cifras no prometen el mismo rendimiento en otra PC; prueban que la arquitectura no depende de datasets pequeños.
@@ -163,3 +178,16 @@ Chromium del runtime bloqueó navegación a localhost por política (`SKIP_POLIC
 - fallback API/static;
 - health/catalog/calibración;
 - pruebas de endpoints del diseñador y CSV.
+
+## Verificación del paquete final v0.6.2
+
+Antes de cerrar la entrega se generó un archivo candidato, se extrajo en un directorio limpio y se comprobó:
+
+- **176/176 archivos** del manifiesto SHA-256;
+- `compileall`: PASS;
+- JavaScript `node --check`: PASS;
+- **59/59 pytest**: PASS;
+- fallback UI/API: PASS, incluido `/api/quality/check`;
+- Chromium real: `SKIP_POLICY` por restricción del runtime, sin ocultarlo como PASS.
+
+Después de registrar esta evidencia se regeneró el manifiesto y el ZIP final.

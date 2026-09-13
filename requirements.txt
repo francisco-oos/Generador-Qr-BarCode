@@ -8,3 +8,4 @@ svglib==1.6.0
 cryptography==46.0.4
 python-multipart==0.0.29
 pyserial==3.5
+pyzbar==0.1.9

@@ -30,7 +30,7 @@ def api_static_fallback() -> dict:
     result: dict[str, object] = {}
     with TestClient(app) as client:
         health = client.get("/api/health")
-        result["health"] = health.status_code == 200 and health.json().get("version") == "0.6.1"
+        result["health"] = health.status_code == 200 and health.json().get("version") == "0.6.2"
         index = client.get("/")
         text = index.text
         result["index"] = index.status_code == 200
@@ -39,6 +39,14 @@ def api_static_fallback() -> dict:
         result["catalog"] = catalog.status_code == 200 and len(catalog.json().get("templates", [])) >= 5
         calib = client.get("/api/calibration/jig/inova_tray_3x4_estimate")
         result["calibration_svg"] = calib.status_code == 200 and "<svg" in calib.json().get("svg", "")
+        template = next(x for x in catalog.json()["templates"] if x["id"] == "inova_quantum_code128_v1")
+        quality = client.post("/api/quality/check", json={
+            "template": template,
+            "data": {"manufacturer_id": "Q00525499"},
+            "scanner_profile_id": "steren_com_597",
+            "digital_stress": True,
+        })
+        result["quality_preflight"] = quality.status_code == 200 and quality.json().get("overall") in {"ROBUSTO", "ACEPTABLE"}
     return result
 
 
@@ -76,6 +84,9 @@ def main() -> None:
                 browser_results["title"] = page.title()
                 browser_results["guided_default"] = not page.locator("body").evaluate("e=>e.classList.contains('expert-mode')")
                 browser_results["preview_has_svg"] = page.locator("#preview svg").count() > 0
+                page.click("#individualQualityBtn")
+                page.wait_for_timeout(450)
+                browser_results["quality_preflight"] = page.locator("#individualQualityResult .quality-card").count() > 0
                 page.click("#expertModeBtn")
                 browser_results["expert_mode"] = page.locator("body").evaluate("e=>e.classList.contains('expert-mode')")
                 page.click('[data-tab="calibration"]')

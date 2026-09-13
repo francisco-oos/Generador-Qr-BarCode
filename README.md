@@ -1,4 +1,4 @@
-# Server Oficina Marking Studio v0.6.1
+# Server Oficina Marking Studio v0.6.2
 
 Generador local y auditable de **marcado físico de activos** para Server Oficina. Convierte identidades provenientes de captura manual, CSV o futura BD en texto + Code 128/QR/Data Matrix, las posiciona sobre jigs/bases, exige conciliación física y entrega archivos a Sculpfun Space/LightBurn/LaserGRBL sin controlar directamente el láser.
 
@@ -7,6 +7,17 @@ Generador local y auditable de **marcado físico de activos** para Server Oficin
 Un nodo sin etiqueta puede seguir siendo reconocible si se le graba `Q00525499`, pero el texto aislado obliga a capturas/verificaciones manuales. Marking Studio mantiene la inspección visual y agrega una representación escaneable. Para INOVA se parte de **Code 128 + ID operativo visible**; Sercel inicia con Code 128 + ID; teléfonos con QR + número económico estable.
 
 El sufijo INOVA `-xx` no se inventa. Se conserva como dato adicional cuando exista, pero el estándar operativo inicial usa el identificador realmente utilizado por la operación.
+
+## Novedades v0.6.2
+
+- **preflight de legibilidad** en Generador y Estudio visual: evalúa geometría, compatibilidad con el lector seleccionado y degradaciones digitales antes de exportar;
+- clasificación visible **ROBUSTO / ACEPTABLE / FRÁGIL / NO LEGIBLE** por cada QR/barcode;
+- prueba opcional de decodificación con `pyzbar` sobre original, reducciones 75/50 %, blur, contraste, rotación y abrasión fina;
+- el lienzo del diseñador queda rotulado explícitamente como **NO escaneable** y la Vista real SVG como **ESCANEABLE**, evitando confundir el placeholder de edición con el código productivo;
+- selector de lector objetivo sin hardcodeo: se alimenta del catálogo de perfiles y recuerda la selección local del operador;
+- advertencias automáticas si un módulo QR/Code128/Code39/Data Matrix se reduce por debajo del perfil conservador;
+- recordatorio operativo permanente: importar/grabar SVG a **tamaño físico 100 %**, sin reescalado de impresora/maquetador;
+- evidencia de campo inicial documentada: en una fotografía de la hoja impresa se recuperaron `TEL-0037` (QR) y `4281847` (Code 128); los códigos más pequeños/fotografiados quedan pendientes de confirmación con el Steren físico.
 
 ## Novedades v0.6.1
 
@@ -47,6 +58,8 @@ El sufijo INOVA `-xx` no se inventa. Se conserva como dato adicional cuando exis
 `./install_macos.sh` y luego `./run_macos.sh`.
 
 Requiere Python 3.12+. La UI abre en `http://127.0.0.1:8787` y FastAPI expone OpenAPI en `/docs`.
+
+El preflight digital de lectura usa `pyzbar`. En Windows normalmente queda disponible con la instalación Python; en Debian/Ubuntu puede requerir `sudo apt install libzbar0` y en macOS `brew install zbar`. Si falta la librería nativa, Marking Studio sigue funcionando y muestra análisis geométrico/lector, pero declara que la decodificación de estrés no está disponible.
 
 ## Flujo operativo
 
@@ -125,6 +138,7 @@ Empiece por:
 - `docs/OPERATING_STANDARD.md`;
 - `docs/CSV_AND_TEMPLATE_GUIDE.md`;
 - `docs/VISUAL_TEMPLATE_STUDIO.md` — diseñador visual, campos y exportación masiva;
+- `docs/SCAN_QUALITY_AND_FIELD_VALIDATION.md` — preflight de lectura, límites y validación física;
 - `docs/UX_AND_WORKFLOW.md` — decisiones de interfaz y flujo para modo guiado/experto;
 - `docs/CODE_REVIEW_GUIDE.md` — inventario de funciones/clases y motivo de cada responsabilidad;
 - `docs/MAINTAINER_GUIDE.md` — invariantes y procedimiento para extender sin hardcodeo;

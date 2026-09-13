@@ -70,14 +70,16 @@ from .models import (
     TemplateSaveRequest,
     TemplatePreviewRequest,
     BulkTemplateExportRequest,
+    CodeQualityCheckRequest,
 )
 from .template_engine import apply_input_rules, render_template
 from .calibration import calibration_target_svg, evaluate_reference_points, jig_reference_points
 from .material_catalog import phone_reference, search_material_reference
+from .code_quality import assess_template_codes
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "app" / "static"
-VERSION = "0.6.1"
+VERSION = "0.6.2"
 
 
 # WHY: Inicializa almacenamiento y recursos una sola vez al arrancar/cerrar la aplicación.
@@ -196,6 +198,28 @@ def render(req: RenderRequest):
         "resolved": mark.resolved,
         "calibration_required": template.calibration_required,
     }
+
+
+# WHY: Prevalida legibilidad de códigos antes de exportar sin sustituir la prueba física con el lector real.
+@app.post("/api/quality/check")
+def code_quality_check(req: CodeQualityCheckRequest) -> dict[str, Any]:
+    _require_license()
+    qualities = load_quality_profiles()
+    quality = qualities.get(req.template.quality_profile)
+    if not quality:
+        raise HTTPException(400, f"Perfil de calidad no encontrado: {req.template.quality_profile}")
+    scanner = None
+    if req.scanner_profile_id:
+        scanner = load_scanners().get(req.scanner_profile_id)
+        if not scanner:
+            raise HTTPException(400, f"Lector no encontrado: {req.scanner_profile_id}")
+    try:
+        return assess_template_codes(
+            req.template, quality, req.data, capture_mode=req.capture_mode,
+            scanner=scanner, dpi=req.dpi, digital_stress=req.digital_stress,
+        )
+    except Exception as exc:
+        raise HTTPException(400, f"No fue posible evaluar legibilidad: {exc}") from exc
 
 
 # WHY: Analiza CSV/listas y devuelve columnas/filas para que el usuario mapee datos sin formato rígido.

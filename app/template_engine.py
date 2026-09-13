@@ -86,6 +86,10 @@ def render_template(template: TemplateSpec, quality: QualityProfile, data: Mappi
         elif el.kind == "code128":
             module = el.module_mm or quality.code128_module_mm
             bar_height = el.height_mm or quality.code128_bar_height_mm
+            if module < quality.code128_module_mm:
+                warnings.append(f"Code128 '{value}' usa módulo {module:.2f} mm menor al perfil conservador {quality.code128_module_mm:.2f} mm")
+            if bar_height < quality.code128_bar_height_mm * 0.8:
+                warnings.append(f"Code128 '{value}' usa barras bajas ({bar_height:.1f} mm) frente al perfil {quality.code128_bar_height_mm:.1f} mm")
             probe = code128_fragment(value, 0, el.y_mm, module, bar_height, quality.code128_quiet_modules)
             px = el.x_mm
             if el.width_mm and el.align == "center" and probe.width_mm <= el.width_mm:
@@ -103,6 +107,8 @@ def render_template(template: TemplateSpec, quality: QualityProfile, data: Mappi
         elif el.kind == "code39":
             module = el.module_mm or quality.code128_module_mm
             bar_height = el.height_mm or quality.code128_bar_height_mm
+            if module < quality.code128_module_mm:
+                warnings.append(f"Code39 '{value}' usa módulo {module:.2f} mm menor al perfil conservador {quality.code128_module_mm:.2f} mm")
             probe = code39_fragment(value, 0, el.y_mm, module, bar_height, quality.code128_quiet_modules)
             px = el.x_mm
             if el.width_mm and el.align == "center" and probe.width_mm <= el.width_mm:
@@ -114,9 +120,12 @@ def render_template(template: TemplateSpec, quality: QualityProfile, data: Mappi
             if el.x_mm + frag.width_mm > template.width_mm + 0.01:
                 warnings.append(f"Code39 '{value}' sale del ancho de la plantilla")
         elif el.kind == "qr":
+            qr_module = el.module_mm or quality.qr_module_mm
+            if qr_module < quality.qr_module_mm:
+                warnings.append(f"QR '{value}' usa módulo {qr_module:.2f} mm menor al perfil conservador {quality.qr_module_mm:.2f} mm")
             frag = qr_fragment(
                 value, el.x_mm, el.y_mm,
-                el.module_mm or quality.qr_module_mm,
+                qr_module,
                 quality.qr_quiet_modules,
                 el.error_correction,
             )
@@ -124,9 +133,12 @@ def render_template(template: TemplateSpec, quality: QualityProfile, data: Mappi
             if el.x_mm + frag.width_mm > template.width_mm + 0.01 or el.y_mm + frag.height_mm > template.height_mm + 0.01:
                 warnings.append(f"QR '{value}' sale de los límites de la plantilla")
         elif el.kind == "datamatrix":
+            dm_module = el.module_mm or quality.datamatrix_module_mm
+            if dm_module < quality.datamatrix_module_mm:
+                warnings.append(f"Data Matrix '{value}' usa módulo {dm_module:.2f} mm menor al perfil conservador {quality.datamatrix_module_mm:.2f} mm")
             frag = datamatrix_fragment(
                 value, el.x_mm, el.y_mm,
-                el.module_mm or quality.datamatrix_module_mm,
+                dm_module,
                 quality.datamatrix_quiet_modules,
             )
             parts.append(frag.svg)

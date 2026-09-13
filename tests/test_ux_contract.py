@@ -41,3 +41,19 @@ def test_guided_mode_hides_system_navigation_only_as_presentation():
     assert "querySelectorAll('.expert-nav')" in js
     # Safety boundary remains independent of UX mode.
     assert "G0 " not in js and "G1 " not in js and "M3 " not in js and "M4 " not in js
+
+
+def test_scan_readiness_is_unambiguous_in_visual_studio():
+    html = (ROOT / "app/static/index.html").read_text(encoding="utf-8")
+    js = (ROOT / "app/static/app.js").read_text(encoding="utf-8")
+    for token in (
+        'NO escaneable',
+        'ESCANEABLE · mismo motor de exportación',
+        'id="designerQualityBtn"',
+        'id="individualQualityBtn"',
+        'id="designerScanner"',
+        'id="individualScanner"',
+    ):
+        assert token in html
+    assert "/api/quality/check" in js
+    assert "function renderQualityResult" in js

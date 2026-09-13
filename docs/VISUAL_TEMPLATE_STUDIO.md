@@ -90,3 +90,17 @@ El motor conserva únicamente lógica genérica de renderizado, validación, exp
 El diseñador permite componer geometría; no aprueba físicamente un material. Una plantilla nueva sigue requiriendo:
 
 **preview → Frame/origen → prueba en descarte → grabado → escaneo → aprobación**.
+## Preflight de legibilidad v0.6.2
+
+El lienzo central usa formas simplificadas para poder arrastrar elementos con fluidez; por ello queda marcado como **NO escaneable**. Debajo aparece la **Vista real SVG de producción**, generada por el mismo `render_template` que usa la exportación y que sí debe ser escaneable.
+
+El botón **Probar código** toma el borrador sin guardarlo, los datos visibles y el lector objetivo seleccionado. El backend evalúa cada QR/barcode por separado:
+
+1. resuelve el dato final después de reglas de captura;
+2. calcula módulo, ancho/alto y quiet zone reales usando el generador productivo;
+3. compara el módulo contra el perfil conservador de calidad;
+4. verifica compatibilidad de simbología con el perfil del lector;
+5. rasteriza el símbolo y, si `pyzbar/libzbar` está disponible, exige que el dato se recupere exactamente bajo una pequeña batería de degradaciones.
+
+El objetivo es impedir que un usuario reduzca visualmente un elemento hasta que “quepa” pero pierda margen de lectura. Un PASS digital no reemplaza la aceptación física del material ni mide por sí mismo el contraste del grabado.
+

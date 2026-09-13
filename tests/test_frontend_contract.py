@@ -18,7 +18,7 @@ def test_every_javascript_dom_id_exists_in_html_and_html_ids_are_unique():
 def test_visual_studio_contract_and_csv_flexibility_are_exposed():
     js = (ROOT / "app/static/app.js").read_text(encoding="utf-8")
     html = (ROOT / "app/static/index.html").read_text(encoding="utf-8")
-    for token in ("designerCanvas", "saveVisualTemplateBtn", "data-add-kind=\"code128\"", "data-add-kind=\"qr\"", "csvHeaderMode", "exportAllSvgBtn", "batchRecordPreview"):
+    for token in ("designerCanvas", "saveVisualTemplateBtn", "data-add-kind=\"code128\"", "data-add-kind=\"qr\"", "csvHeaderMode", "exportAllSvgBtn", "batchRecordPreview", "designerQualityBtn", "individualQualityBtn"):
         assert token in html
     assert "/api/templates/preview" in js
     assert "/api/bulk/svg-export" in js

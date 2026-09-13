@@ -1,4 +1,4 @@
-# Guía de mantenimiento y revisión técnica — v0.6.1
+# Guía de mantenimiento y revisión técnica — v0.6.2
 
 ## Propósito
 
@@ -103,3 +103,7 @@ Ejemplo pobre:
 - major: cambios incompatibles de modelo/archivo/API.
 
 Las plantillas tienen su propio `version` y no deben depender exclusivamente de la versión de la aplicación.
+
+## Invariante adicional: preflight ≠ certificación física
+
+`app/code_quality.py` debe seguir reutilizando los generadores reales de `barcode_engine.py`; no debe mantener una segunda implementación de QR/barcode. Su clasificación sólo es un filtro preventivo. Nunca cambie mensajes o estados para afirmar certificación ISO/IEC o aprobación de material sin una prueba física documentada.
