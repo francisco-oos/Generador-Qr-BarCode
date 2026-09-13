@@ -61,3 +61,32 @@ def build_batch_zip(svg: str, preview_svg: str, png: bytes, manifest: list[dict]
             ).encode("utf-8"),
         )
     return buf.getvalue()
+
+
+def build_bulk_template_zip(items: list[dict], metadata: dict) -> bytes:
+    """Package one SVG per data row plus a manifest for downstream machine software.
+
+    ``items`` entries contain ``filename``, ``svg`` and ``data``.  The function
+    never emits controller commands; it only packages portable artwork.
+    """
+    buf = io.BytesIO()
+    manifest: list[dict] = []
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
+        for index, item in enumerate(items, start=1):
+            filename = str(item["filename"])
+            z.writestr(f"svg/{filename}.svg", str(item["svg"]).encode("utf-8"))
+            manifest.append({"index": index, "filename": filename, **{str(k): str(v) for k, v in item.get("data", {}).items()}})
+        z.writestr("manifest/manifest.csv", manifest_csv_bytes(manifest))
+        z.writestr("manifest/manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False).encode("utf-8"))
+        z.writestr("manifest/job.json", json.dumps(metadata, indent=2, ensure_ascii=False).encode("utf-8"))
+        z.writestr(
+            "README_FIRST.txt",
+            (
+                "SERVER OFICINA MARKING STUDIO — EXPORTACION MASIVA\n"
+                "Cada archivo de svg/ es una marca individual generada desde la misma plantilla.\n"
+                "Importe los SVG en LightBurn, Sculpfun Space u otro software de máquina compatible.\n"
+                "Este paquete NO contiene G-code ni controla el láser.\n"
+                "Verifique Frame/origen, material, preset y lectura del código antes de producción.\n"
+            ).encode("utf-8"),
+        )
+    return buf.getvalue()

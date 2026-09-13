@@ -1,6 +1,6 @@
 [project]
 name = "server-oficina-marking-studio"
-version = "0.5.0"
+version = "0.6.0"
 description = "Generador local de marcados QR/barcode/serie para Server Oficina"
 requires-python = ">=3.12"
 license = {text = "Proprietary - internal evaluation"}

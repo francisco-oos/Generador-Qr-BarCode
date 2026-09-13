@@ -57,3 +57,21 @@ def test_csv_dialects_bom_quotes_blank_and_5000_rows():
     assert headers2 == ["manufacturer_id", "note"]
     assert len(rows2) == 5000
     assert rows2[-1]["manufacturer_id"] == "Q00004999"
+
+
+def test_physical_reconciliation_uses_template_primary_identity_not_fixed_field_names():
+    from app.models import TemplateSpec, BatchAssignment
+    from app.config_loader import load_machines, load_jigs, load_quality_profiles
+    from app.batch_engine import render_batch
+
+    template = TemplateSpec.model_validate({
+        "id":"qa_custom_identity","name":"QA","category":"generic","width_mm":30,"height_mm":12,
+        "quality_profile":"rugged_field_v1","expected_fields":["folio_local"],"input_rules":[],
+        "elements":[{"kind":"text","x_mm":1,"y_mm":8,"source":"folio_local","width_mm":28,"font_size_mm":4,"align":"center"}],
+        "metadata":{"primary_identity_field":"folio_local"},
+    })
+    machine = load_machines()["sculpfun_s9_pro_10w"]
+    jig = load_jigs()["single_asset"]
+    quality = load_quality_profiles()["rugged_field_v1"]
+    result = render_batch(machine, jig, template, quality, [{"folio_local":"ABC-77"}], [BatchAssignment(slot_index=0,row_index=0,physical_id="ABC-77")], True)
+    assert result.manifest[0]["id"] == "ABC-77"

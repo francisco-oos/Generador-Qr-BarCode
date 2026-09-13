@@ -45,7 +45,7 @@ Por cada combinación **máquina + material/carcasa + plantilla** registrar:
 - pasadas;
 - air assist si aplica;
 - resultado visual;
-- lectura del LS2208/lector real;
+- lectura del lector real (Steren COM-597 confirmado; LS2208 u otro 1D si existe otra estación);
 - fotos y observaciones.
 
 Usar Material Test de LightBurn para determinar parámetros. No copiar parámetros de otro plástico o carcasa sin prueba.
@@ -72,7 +72,7 @@ Después de grabar:
 
 ### Sercel DFU
 
-- Primario actual: Code 128 por compatibilidad con LS2208.
+- Primario actual: Code 128 por rapidez, inspección visual y compatibilidad tanto con el COM-597 como con lectores 1D heredados.
 - Texto visible: serial/ID confirmado.
 - No se clona el Data Matrix original hasta leer y documentar su contenido real.
 - Plantilla inicial: `sercel_dfu_code128_v1`.
@@ -111,3 +111,8 @@ Para captura manual, una plantilla puede exigir prefijo/sufijo. Para CSV el est�
 Antes de aprobar una base nueva, generar el patrón `CALIBRATION ONLY` y medir `P0`, `PX` y `PY`. El evaluador detecta desplazamiento, escala, rotación y pérdida de escuadra; es diagnóstico y **no corrige automáticamente la máquina**. Para la estación inicial, usar jig fijo + Current Position/User Origin + Frame salvo que homing/origen absoluto estén físicamente validados.
 
 Consultar `CALIBRATION_AND_ALIGNMENT.md`.
+
+
+## Validación con Steren COM-597
+
+Para aceptar una plantilla física: 1) verificar quiet zone intacta, 2) escanear cinco veces desde posición normal, 3) repetir con inclinación moderada, 4) confirmar texto devuelto exactamente contra el esperado, 5) registrar PASS/FAIL. Para QR se recomienda comenzar a 6–10 cm, rango de ejemplo documentado por Steren; para Data Matrix, 7–10 cm. No reducir tamaños únicamente porque el lector pueda resolver símbolos más finos: el objetivo es tolerancia a desgaste y suciedad.

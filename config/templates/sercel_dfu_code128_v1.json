@@ -39,6 +39,19 @@
       "manufacturer_id": "4281847",
       "serial": "4281847",
       "asset_id": "NODE-4281847"
+    },
+    "primary_identity_field": "manufacturer_id",
+    "csv_aliases": {
+      "manufacturer_id": [
+        "manufacturer_id",
+        "serial",
+        "serie",
+        "nodo",
+        "node",
+        "id",
+        "numero",
+        "número"
+      ]
     }
   },
   "input_rules": []

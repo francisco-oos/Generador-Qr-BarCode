@@ -136,3 +136,66 @@ def test_csv_upload_inspect_1200_real_sample():
         body = response.json()
         assert len(body["rows"]) == 1200
         assert "manufacturer_id" in body["headers"]
+
+
+def test_visual_template_preview_without_persisting():
+    with TestClient(app) as client:
+        draft = {
+            "id": "qa_visual_draft",
+            "name": "QA visual draft",
+            "version": "1.0",
+            "category": "qa",
+            "width_mm": 40,
+            "height_mm": 20,
+            "quality_profile": "rugged_field_v1",
+            "calibration_required": True,
+            "expected_fields": ["serial"],
+            "input_rules": [],
+            "elements": [
+                {"kind":"code128","x_mm":1,"y_mm":1,"source":"serial","width_mm":38,"height_mm":9,"align":"center","font_size_mm":4,"error_correction":"M","stroke_mm":0.25},
+                {"kind":"text","x_mm":1,"y_mm":18,"source":"serial","width_mm":38,"font_size_mm":3.5,"align":"center","error_correction":"M","stroke_mm":0.25},
+            ],
+            "metadata": {"primary_identity_field":"serial"},
+        }
+        r = client.post("/api/templates/preview", json={"template": draft, "data":{"serial":"ABC123"}, "capture_mode":"manual", "output":"svg"})
+        assert r.status_code == 200
+        body = r.json()
+        assert "<svg" in body["svg"]
+        assert "ABC123" in body["svg"]
+        # Preview is ephemeral; it must not appear in the persisted catalog.
+        c = client.get("/api/catalog").json()
+        assert not any(x["id"] == "qa_visual_draft" for x in c["templates"])
+
+
+def test_headerless_single_column_csv_keeps_first_serial_and_explicit_modes():
+    data = b"Q00525499\nQ00525500\nQ00525501\n"
+    with TestClient(app) as client:
+        auto = client.post("/api/csv/inspect?header_mode=auto", files={"file": ("serials.txt", data, "text/plain")})
+        assert auto.status_code == 200
+        assert auto.json()["headers"] == ["value"]
+        assert [r["value"] for r in auto.json()["rows"]] == ["Q00525499","Q00525500","Q00525501"]
+        yes = client.post("/api/csv/inspect?header_mode=yes", files={"file": ("serials.csv", b"serial\nA1\nA2\n", "text/csv")})
+        assert yes.status_code == 200
+        assert yes.json()["headers"] == ["serial"]
+        assert len(yes.json()["rows"]) == 2
+
+
+def test_bulk_svg_export_1000_records_uses_same_template():
+    import io
+    import zipfile
+    rows = [{"manufacturer_id": f"Q00{525499+i:06d}"} for i in range(1000)]
+    with TestClient(app) as client:
+        r = client.post("/api/bulk/svg-export", json={
+            "template_id":"inova_quantum_code128_v1",
+            "rows": rows,
+            "filename_field":"manufacturer_id",
+        })
+        assert r.status_code == 200
+        assert r.headers["x-record-count"] == "1000"
+        with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+            svg_names = [n for n in z.namelist() if n.startswith("svg/") and n.endswith(".svg")]
+            assert len(svg_names) == 1000
+            assert "svg/Q00525499.svg" in svg_names
+            assert "manifest/manifest.csv" in z.namelist()
+            first = z.read("svg/Q00525499.svg").decode("utf-8")
+            assert "Q00525499" in first

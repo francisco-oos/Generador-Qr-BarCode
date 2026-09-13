@@ -185,7 +185,7 @@ class BatchExportRequest(BaseModel):
 
 
 class SeriesGenerateRequest(BaseModel):
-    field: str = Field(default="manufacturer_id", min_length=1, max_length=64)
+    field: str = Field(default="value", min_length=1, max_length=64)
     prefix: str = Field(default="", max_length=64)
     start: int = Field(default=1, ge=0)
     count: int = Field(default=100, ge=1, le=100000)
@@ -210,6 +210,26 @@ class ScanVerifyRequest(BaseModel):
 
 class TemplateSaveRequest(BaseModel):
     template: TemplateSpec
+
+
+class TemplatePreviewRequest(BaseModel):
+    """Render an unsaved visual-designer draft without persisting it."""
+    template: TemplateSpec
+    data: dict[str, str] = Field(default_factory=dict)
+    capture_mode: Literal["manual", "import"] = "manual"
+    output: Literal["svg", "png"] = "svg"
+    dpi: int | None = Field(default=None, ge=150, le=2400)
+
+
+class BulkTemplateExportRequest(BaseModel):
+    """Export one SVG per row using a saved template.
+
+    This is intentionally geometry-only. Machine control remains in LightBurn,
+    Sculpfun Space or the configured handoff application.
+    """
+    template_id: str
+    rows: list[dict[str, str]] = Field(min_length=1, max_length=10000)
+    filename_field: str | None = Field(default=None, max_length=64)
 
 
 class JigSaveRequest(BaseModel):

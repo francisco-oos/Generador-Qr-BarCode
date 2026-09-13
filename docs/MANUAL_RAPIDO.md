@@ -1,143 +1,113 @@
-# Manual rápido — Server Oficina Marking Studio 0.5
+# Manual rápido — Server Oficina Marking Studio 0.6
 
-Este manual está pensado para alguien que **sabe identificar el equipo pero no necesita conocer programación, SVG o GRBL**.
+Pensado para un operador que conoce el equipo, pero no necesita saber programación, SVG o GRBL.
 
-## 1. Abrir el programa
+## 1. Abrir
 
-### Windows
+- Windows: primera vez `install_windows.bat`; después `run_windows.bat`.
+- Linux: `./install_linux.sh` y `./run_linux.sh`.
+- macOS: `./install_macos.sh` y `./run_macos.sh`.
 
-1. Primera vez: ejecutar `install_windows.bat`.
-2. Uso diario: ejecutar `run_windows.bat`.
-3. Abrir `http://127.0.0.1:8787` si el navegador no se abre solo.
+Abrir `http://127.0.0.1:8787` si el navegador no se abre solo.
 
-### Linux
+## 2. Usar una plantilla ya preparada
 
-```bash
-./install_linux.sh
-./run_linux.sh
+1. Entre a **Generador**.
+2. Seleccione INOVA, Sercel, Teléfono u otra plantilla guardada.
+3. Escriba los datos solicitados.
+4. La vista previa cambia al actualizar los datos.
+5. Descargue SVG (preferido) o PNG.
+6. Abra el archivo en LightBurn, Sculpfun Space o el software configurado para la máquina.
+7. Use el preset ya validado por el área, verifique foco/origen y haga **Frame**.
+8. Grabe y luego use **Verificar escaneo**.
+
+Marking Studio genera el diseño; **no sustituye el software que controla la grabadora**.
+
+## 3. Crear una plantilla visual
+
+1. Abra **Estudio visual**.
+2. Elija una plantilla base y pulse **Duplicar**, o **Nueva en blanco**.
+3. Defina ancho/alto del área de marcado en milímetros.
+4. Agregue campos de datos, por ejemplo `serial`, `economico` o `asset_id`.
+5. Pulse un elemento: **Texto/serie, Texto fijo, Code 128, QR, Data Matrix**, etc.
+6. Arrástrelo con el mouse al lugar deseado.
+7. Selecciónelo y ajuste X/Y, medidas, fuente, módulo y campo origen.
+8. Observe **Vista real SVG**. Ésa usa el mismo renderizador de la producción.
+9. Elija la **identidad principal** para conciliación física/nombre de archivo.
+10. Pulse **Guardar plantilla**.
+
+La nueva plantilla aparece en Generador y Lotes/CSV sin modificar código.
+
+## 4. Prefijo al capturar a mano
+
+En Estudio visual, seleccione el campo y configure una regla. Ejemplo:
+
+- operador escribe `525499`;
+- prefijo manual `Q00`;
+- resultado `Q00525499`.
+
+Por defecto, un CSV con `Q00525499` se usa **tal cual**, para evitar `Q00Q00525499`.
+
+## 5. Cargar CSV o una lista de puros números
+
+En **Lotes / CSV** puede cargar:
+
+```text
+Q00525499
+Q00525500
+Q00525501
 ```
 
-### macOS
+sin encabezado, o un CSV con muchas columnas.
 
-```bash
-./install_macos.sh
-./run_macos.sh
-```
+En **Encabezados** elija:
 
-## 2. Elegir modo
+- Detectar automáticamente;
+- La primera fila es encabezado;
+- Lista sin encabezado.
 
-- **Guiado**: recomendado para producción diaria. Oculta configuración técnica.
-- **Experto**: plantillas JSON, calibración avanzada, descubrimiento de software y diagnóstico GRBL read-only.
+Si sólo existe una columna, el programa la propone automáticamente para los campos de la plantilla. Con varias columnas, muestra el mapeo y usted decide qué columna alimenta cada campo.
 
-Cambiar de modo no cambia los datos ni el trabajo; sólo la cantidad de controles visibles.
+La vista previa del primer registro cambia en cuanto modifica el mapeo.
 
-## 3. Grabar un solo equipo
+## 6. Trabajar con un jig/base
 
-1. Ir a **Generador**.
-2. Elegir plantilla: INOVA, Sercel, teléfono, etc.
-3. Capturar el ID.
-4. Si la plantilla pregunta **¿usar prefijo?**, elegirlo sólo para captura manual. Ejemplo: escribir `525499` y usar `Q00` produce `Q00525499`.
-5. Revisar el resultado visible y el código.
-6. Exportar SVG.
-7. Abrirlo en Sculpfun Space o LightBurn.
-8. Aplicar el preset ya probado para ese material/superficie.
-9. Ajustar foco y usar **Frame**.
-10. Grabar.
-11. Ir a **Verificar escaneo** y comprobar que el lector devuelve exactamente el ID esperado.
+1. Cargue datos.
+2. Elija plantilla y jig.
+3. Pulse **Preparar posiciones**.
+4. Coloque las piezas físicamente.
+5. Capture/escanee el ID escrito en cada posición.
+6. Si aparece **NO coincide**, no exporte: corrija pieza o fila.
+7. Exportar trabajo ZIP.
+8. Abra `engraving/batch.svg` en el software del láser.
+9. Nunca grabe `preview/preview_DO_NOT_ENGRAVE.svg`.
+10. Frame → grabar → verificar.
 
-## 4. Grabar varios equipos con CSV
+## 7. Generar muchos SVG sin jig
 
-1. Ir a **Lotes / CSV**.
-2. Elegir plantilla y jig.
-3. Cargar CSV.
-4. Mapear la columna del identificador.
-5. El valor del CSV se conserva **tal como viene** por defecto; no se agrega prefijo automáticamente salvo que la plantilla lo indique expresamente.
-6. Pulsar **Preparar posiciones**.
-7. Colocar las piezas en el jig.
-8. Para cada posición, escribir/escanear el ID que realmente está sobre la pieza.
-9. Si aparece **NO coincide**, detenerse y corregir. No exportar.
-10. Cuando todo coincida, exportar el ZIP del lote.
-11. Abrir `engraving/batch.svg` en el software de láser.
-12. No grabar `preview/preview_DO_NOT_ENGRAVE.svg`.
-13. Frame → grabar → verificar escaneos.
-14. Pulsar **Siguiente lote** para continuar.
+Después de cargar/mapear el CSV, pulse **Generar SVG individuales del CSV**. El ZIP contendrá un SVG por fila más manifiestos. Es útil si después el área quiere acomodarlos manualmente en LightBurn/Sculpfun Space.
 
-### Ejemplo de escala
+La prueba de software ejercita 1 000 y 5 000 SVG individuales.
 
-Si hay 1,200 nodos y el jig acepta 12, Marking Studio prepara **100 cargas de 12**. No intenta poner 1,200 códigos en una sola cama.
+## 8. Lectores
 
-## 5. Crear una serie sin CSV
+- **Steren COM-597**: puede verificar Code 128, QR y Data Matrix según el perfil documentado del proyecto.
+- **LS2208** (si todavía existe alguna estación): lector 1D; usar Code 128, no QR.
 
-Sólo para rangos que la operación ya autorizó:
+El código correcto es el que el lector real lee repetidamente después del grabado, no sólo el que se ve bien en pantalla.
 
-1. indicar prefijo;
-2. número inicial;
-3. cantidad;
-4. ancho con ceros;
-5. sufijo opcional.
+## 9. Materiales y teléfonos
 
-Ejemplo: `Q00` + `525499` + 3 genera:
+Primero reutilice el ajuste que el área ya sabe que funciona para la misma máquina/superficie. No existe un preset universal para “plástico” o “Xiaomi”. Modelo y zona importan.
 
-- `Q00525499`
-- `Q00525500`
-- `Q00525501`
+Para una superficie nueva: material identificado → prueba conservadora → contraste legible → verificación con lector → guardar preset local.
 
-**No usar esta función para adivinar seriales de fabricante.**
+## 10. Calibrar posición
 
-## 6. Usar un ajuste que el taller ya conoce
+Use **Calibración** con material de sacrificio. Genere P0/PX/PY, haga Frame, mida y compare. No use un activo bueno para descubrir offsets.
 
-Ir a **Materiales**.
+## 11. Regla final
 
-Si el ajuste ya produce grabado visible:
-
-- capturarlo manualmente, o
-- importarlo desde LightBurn/LaserGRBL.
-
-Guardar siempre el modelo/superficie exacta. No crear “preset Xiaomi” o “preset plástico” genérico si los materiales cambian.
-
-## 7. Calibrar una base/jig
-
-1. Ir a **Calibración**.
-2. Elegir jig.
-3. Generar referencias.
-4. Descargar SVG de calibración.
-5. Usar sólo material de sacrificio.
-6. Abrir en software de láser.
-7. Frame.
-8. Marcar/medir `P0`, `PX`, `PY`.
-9. En modo Experto introducir las mediciones.
-10. Si el sistema reporta desplazamiento, escala o escuadra, corregir el montaje/configuración y repetir.
-
-## 8. Enfoque de la SCULPFUN S9 Pro
-
-El manual oficial revisado usa una **columna de 50 mm**: el foco está 50 mm bajo el borde inferior de la carcasa de aluminio del módulo láser. Seguir el manual de la unidad real y el procedimiento ya validado del área.
-
-## 9. Qué código usar
-
-- **INOVA**: Code 128 + ID visible (`Q00525499`).
-- **Sercel con lector 1D actual**: Code 128 + ID visible.
-- **Teléfono**: QR + número económico visible.
-- **Equipo nuevo**: crear plantilla, probar y aprobar antes de producción.
-
-El lector Zebra/Symbol LS2208 es 1D: no esperar que lea QR.
-
-## 10. Si algo falla
-
-| Problema | Qué revisar |
-|---|---|
-| Código se ve pero no escanea | tamaño, quiet zone, contraste, foco, orientación, lector correcto |
-| Texto correcto pero barcode equivocado | payload de plantilla / columna CSV |
-| Pieza equivocada en slot | conciliación física; no omitirla |
-| SVG aparece con tamaño raro | importación en mm / escala en software de láser |
-| Grabado demasiado tenue/fuerte | preset exacto del material; Material Test, no adivinar |
-| Posición corrida | P0/origen, Frame y calibración de jig |
-| No detecta LightBurn/LaserGRBL | usar importación manual del archivo de settings |
-| Puerto ocupado | cerrar/desconectar el software que tenga abierto el láser |
-
-## 11. Regla de producción
-
-Antes de liberar un activo deben existir tres comprobaciones:
+Un trabajo sólo se libera cuando se cumplen las tres:
 
 **ID correcto + grabado visible + lectura correcta.**
-
-Cuando se integre con Server Oficina, esa verificación quedará ligada al histórico del activo.

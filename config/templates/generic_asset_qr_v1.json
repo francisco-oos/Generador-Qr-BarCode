@@ -34,6 +34,15 @@
     "purpose": "Punto de partida; copiar y ajustar medidas sin cambiar código.",
     "example_data": {
       "asset_id": "RADIO-000184"
+    },
+    "primary_identity_field": "asset_id",
+    "csv_aliases": {
+      "asset_id": [
+        "asset_id",
+        "activo",
+        "id_activo",
+        "id"
+      ]
     }
   },
   "input_rules": []

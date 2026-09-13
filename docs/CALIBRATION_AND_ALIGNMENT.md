@@ -1,7 +1,7 @@
 # Calibración, alineación y puntos de referencia
 
 Fecha: 2026-09-12  
-Aplicación: Server Oficina Marking Studio 0.5.0
+Aplicación: Server Oficina Marking Studio 0.6.0
 
 ## Objetivo
 

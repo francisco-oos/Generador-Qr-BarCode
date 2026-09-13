@@ -1,4 +1,4 @@
-# Reporte de pruebas — Server Oficina Marking Studio v0.5.0
+# Reporte de pruebas — Server Oficina Marking Studio v0.6.0
 
 Fecha de cierre: 2026-09-12
 
@@ -6,176 +6,145 @@ Fecha de cierre: 2026-09-12
 
 **Estado de software: PASS / listo para piloto físico controlado.**
 
-Esto significa que la generación, parsing, API, persistencia, licenciamiento, exportación, simulación de lectura, escalabilidad, interoperabilidad SVG y diagnóstico GRBL read-only pasaron en el host de validación. **No significa que un grabado físico específico esté aprobado**: potencia/velocidad/foco/contraste/material y repetibilidad del jig requieren la SCULPFUN real, las carcasas reales y el lector real.
+La v0.6 añade el Estudio visual de marcado, CSV/listas flexibles y exportación masiva de SVG sin cambiar el límite de seguridad: Marking Studio genera diseño y trazabilidad; el software de la grabadora continúa controlando movimiento, potencia y disparo.
 
-## Matriz de pruebas ejecutadas
+## Matriz final
 
-| Prueba | Resultado | Evidencia |
-|---|---|---|
-| Pytest completo | **41/41 PASS** | tests unitarios/integración |
-| `compileall` app/scripts/tests | **PASS** | consola QA |
-| JavaScript `node --check` | **PASS** | consola QA |
-| Runtime/API `/api/health` | **PASS** | versión 0.5.0, licencia standalone válida |
-| Compatibilidad/preflight | **PASS** | `qa/output/compatibility_report.json` |
-| Simulación de lectura | **28/28 PASS** | Code128 + QR degradados |
-| Decodificación lote INOVA 3×4 | **12/12 PASS** | 12 Code 128 distintos |
-| Escalabilidad 1,200 registros | **PASS** | 100 cargas de 12 |
-| 2,500 renders individuales | **PASS** | 499.4 marcas/s en este host |
-| GRBL serial simulado | **PASS** | sólo `$I` y `$$`; 0 comandos prohibidos |
-| SVG interop XML/svglib/Inkscape | **PASS** | 5 plantillas + lote 12 + SVG de calibración |
-| Importación de archivos de configuración | **PASS** | `.clb`, `.lbmt`, `.psh`, dump GRBL |
-| Guías de jig ausentes de SVG productivo | **PASS** | `guide_in_production=false` |
-| UI/API fallback | **PASS** | health, index, modo guiado/experto, catálogo, calibración |
-| Browser E2E Chromium | **SKIP_POLICY** | bloqueado por política del runtime, no por error de app |
-| Bash syntax launchers Linux/macOS | **PASS** | `bash -n` |
-| ZIP reextraído y verificado | **PASS** | hashes 159/159, compile, 41 tests, JS, compatibilidad, importadores, SVG y API health |
+| Prueba | Resultado |
+|---|---|
+| Pytest | **48/48 PASS** |
+| `compileall` | **PASS** |
+| JavaScript `node --check` | **PASS** |
+| API `/api/health` | **PASS · v0.6.0** |
+| Catálogo/configuración | **PASS** |
+| Render de todas las plantillas guardadas | **PASS** |
+| Preview de plantilla visual no persistida | **PASS** |
+| Contrato HTML ↔ JS | **PASS** |
+| CSV 1,200 filas HTTP | **PASS** |
+| Lista de una columna sin encabezado | **PASS** |
+| CSV con encabezado forzado | **PASS** |
+| Mapeo sin tabla de sinónimos hardcodeada en JS | **PASS** |
+| Identidad física gobernada por `primary_identity_field` | **PASS** |
+| Exportación masiva 1,000 SVG | **PASS** |
+| Exportación masiva 5,000 SVG | **PASS** |
+| Simulación de lectura | **28/28 PASS** |
+| Decodificación jig INOVA 3×4 | **12/12 PASS** |
+| SVG XML/svglib/Inkscape | **PASS** |
+| Importadores `.clb/.lbmt/.psh/GRBL` | **4/4 PASS** |
+| Simulador GRBL read-only | **PASS · sólo `$I` y `$$`** |
+| Calibración P0/PX/PY | **PASS** |
+| Benchmark 1,200 registros / 2,500 renders | **PASS** |
+| UI navegador real | **SKIP_POLICY** |
+| Fallback API/HTML de UI | **PASS** |
 
-## Pruebas de captura y datos
+## Pruebas específicas del Estudio visual
 
-La suite cubre:
+Se verificó que un borrador completo puede enviarse a `/api/templates/preview` y renderizarse con el mismo `TemplateSpec`/`render_template` de producción sin guardarlo primero. Esto evita una diferencia entre “lo que se ve en el editor” y “lo que exporta el motor”.
 
-- carga multipart HTTP de un CSV real de 1,200 registros mediante la API;
+El contrato frontend exige controles para:
 
-- captura manual con prefijo/sufijo;
-- CSV sin duplicar prefijo por defecto;
-- CSV UTF-8 BOM;
-- separadores coma, punto y coma y tab;
-- campos entrecomillados;
-- archivos de 1,200 y 5,000 registros;
-- generación de serie >1,000;
-- conciliación física que bloquea discrepancias;
-- exportación ZIP con SVG/PNG/manifiestos;
-- verificación de escaneo y actualización de histórico.
+- lienzo visual;
+- agregar Code 128 y QR;
+- guardar plantilla;
+- elegir modo de encabezado del CSV;
+- vista previa del primer registro;
+- exportación masiva de SVG.
 
-## Generación/lectura de códigos
+También se añadió una prueba que falla si reaparece la antigua tabla de sinónimos de equipo hardcodeada en JavaScript.
 
-La simulación renderiza a raster y usa un decodificador independiente. Para INOVA, Sercel, teléfono y QR genérico se probaron variantes:
+## CSV/listas
 
-- pristine;
+El parser fue ampliado para tres modos:
+
+- `auto`;
+- `yes` = primera fila es encabezado;
+- `no` = sin encabezado.
+
+La prueba con:
+
+```text
+Q00525499
+Q00525500
+Q00525501
+```
+
+conserva los tres valores y crea una sola columna `value`. La primera serie ya no se pierde como encabezado accidental.
+
+Para archivos de una sola columna, el frontend propone esa columna a los campos de la plantilla; en archivos multicolumna usa nombres/alias almacenados en la propia plantilla y siempre permite corrección manual.
+
+## Eliminación de hardcodeo operativo
+
+Se verificó que la conciliación de lote del backend toma la identidad desde `template.metadata.primary_identity_field`; si no existe, usa el primer campo esperado y finalmente un valor no vacío genérico. Ya no existe un orden fijo de `manufacturer_id → operational_id → asset_id → ...` en el motor de lote.
+
+Los defaults de serie INOVA también dejaron de estar en el HTML: campo, prefijo y sufijo se cargan desde la plantilla seleccionada.
+
+## Exportación masiva
+
+`/api/bulk/svg-export` genera un SVG por fila más manifiestos, sin G-code ni comandos de máquina.
+
+Pruebas:
+
+- 1,000 registros: **PASS**, 1,000 SVG presentes y contenido validado;
+- 5,000 registros: **PASS**, ~5.29 MB de ZIP en este dataset; ejecución observada ~12.3 s en el host de prueba, con pico RSS ~195 MB.
+
+El límite por solicitud es 10,000 filas para evitar trabajos no acotados. Para producción con jig se mantiene el fraccionamiento por capacidad física.
+
+## Simulación de códigos
+
+La batería existente mantiene **28/28** lecturas correctas sobre Code 128 y QR con:
+
+- original;
 - reducción 50 %;
 - blur 0.6;
 - blur 1.0;
 - rotación 2°;
-- contraste reducido al 55 %;
+- contraste reducido;
 - abrasión digital delgada.
 
-Resultado: **28/28 lecturas correctas**. Esto valida la geometría digital, no la calidad óptica del láser sobre una carcasa real.
+El jig INOVA completo mantiene **12/12 Code 128** decodificados.
 
-## Lote 3×4
+Además se generó `samples/output/visual_designer_composite.svg` y PNG 600 DPI con Code 128 + QR + textos en una plantilla arbitraria; un decodificador independiente recuperó `Q00525499` y `TEL-0037`.
 
-La imagen completa de 12 posiciones contiene:
+## Benchmark base
 
-`Q00525499` a `Q00525510`.
+Última corrida de `benchmark_scale.py`:
 
-El decodificador recuperó los **12/12 Code 128** sin faltantes ni códigos inesperados. La salida productiva no contiene rectángulos del jig; esos viven sólo en `preview_DO_NOT_ENGRAVE.svg`.
+- registros: 1,200;
+- jig: 12;
+- cargas: 100;
+- 2,500 renders individuales: ~5.17 s;
+- ~483 marcas/s en este host;
+- batch vectorial de 1,200: ~2.43 s;
+- PNG de última cama 300 DPI: ~5.37 s;
+- estado: **PASS**.
 
-## Escalabilidad
+Estas cifras no prometen el mismo rendimiento en otra PC; prueban que la arquitectura no depende de datasets pequeños.
 
-Resultados de esta corrida:
+## Interoperabilidad y máquina
 
-- dataset: 1200 registros;
-- capacidad jig: 12;
-- cargas físicas: 100;
-- 2,500 renders: 5.005 s;
-- rendimiento observado: 499.5 marcas/s;
-- incremento de RSS observado: ~5.62 MiB;
-- batch vectorial de 1,200: 2.433 s;
-- PNG de cama completa 300 DPI: 5.69 s.
+Todos los SVG guardados pasaron XML, svglib e Inkscape. El diagnóstico GRBL simulado transmitió exclusivamente `$I` y `$$`, con cero comandos prohibidos.
 
-Estos tiempos describen este host Linux de validación y no son una promesa de rendimiento idéntico en la PC del taller.
+El control productivo permanece fuera de Marking Studio. La salida se entrega a Sculpfun Space, LightBurn o el flujo compatible configurado para la máquina.
 
-## Interoperabilidad SVG
+## Límite de la validación
 
-Todas las plantillas fueron:
+No se certifica digitalmente:
 
-1. parseadas como XML;
-2. rasterizadas con `svglib`;
-3. abiertas/exportadas mediante Inkscape disponible en el host.
+- potencia/velocidad real sobre una carcasa;
+- foco real de la unidad instalada;
+- contraste después del láser;
+- desgaste físico;
+- repetibilidad mecánica del jig;
+- lectura real bajo suciedad/campo.
 
-Las 5 plantillas, el batch 3×4 y el SVG `CALIBRATION ONLY` pasaron. El SVG de calibración contiene marcas P0/PX/PY y una leyenda explícita para evitar confundirlo con una salida productiva. Esto reduce el riesgo de entregar un SVG sintácticamente válido pero incompatible con herramientas vectoriales comunes.
+Eso requiere la SCULPFUN, el material real y el lector operativo. El software ya contiene el procedimiento para capturar el preset que el área utiliza, hacer Frame/calibración y verificar por escaneo.
 
-## Diagnóstico GRBL
+## Browser E2E
 
-El simulador serial recibió exactamente:
+Chromium del runtime bloqueó navegación a localhost por política (`SKIP_POLICY`). No se presenta como PASS ficticio. Se ejecutaron en su lugar:
 
-```text
-$I
-$$
-```
-
-No recibió movimiento, homing, laser/spindle, setting-write ni potencia. Se parsearon correctamente `$30`, `$32`, `$130`, `$131`.
-
-## Configuraciones de software de máquina
-
-Además de fixtures unitarios, se cargaron archivos de ejemplo reales del paquete mediante los importadores de producción; los 4/4 casos pasaron: LightBurn `.clb`, LightBurn `.lbmt`, LaserGRBL `.psh` y dump de `$I/$$`.
-
-Se probaron parsers/rutas para:
-
-- LightBurn `.clb`, `.lbmt`, `.lbset`, `.lbrn/.lbrn2`, `.lbprefs`, `prefs.ini`, `.lbzip`;
-- LaserGRBL `.psh`;
-- captura manual de preset local;
-- rutas de descubrimiento Windows/Linux/macOS cuando aplica.
-
-El programa archiva la copia importada con hash y no reescribe el archivo original.
-
-## Calibración
-
-Las 5 definiciones de jig generan `P0/PX/PY`. Las pruebas unitarias confirman:
-
-- caso perfecto;
-- detección de traslación;
-- detección de escala;
-- detección de desviación angular/escuadra.
-
-El evaluador es diagnóstico y nunca modifica automáticamente la máquina.
-
-## UX guiada y experta
-
-La UI incluye:
-
-- **Modo guiado**: flujo corto, menos controles técnicos;
-- **Modo experto**: JSON de plantilla/jig, calibración avanzada, importadores y diagnóstico.
-
-El navegador Chromium del entorno de ejecución bloqueó `localhost` con `ERR_BLOCKED_BY_ADMINISTRATOR`, por lo que el E2E visual se registra correctamente como **SKIP_POLICY**, no como PASS falso. El fallback FastAPI/HTML sí pasó y la sintaxis JS fue validada con Node.
-
-## Compatibilidad por sistema operativo
-
-El host realmente ejecutado fue Linux x86_64 / Python 3.13.5. Existen launchers y CI declarada para Windows, Linux y macOS con Python 3.12/3.13. No se afirma ejecución física Windows/macOS desde este host.
-
-- Linux/macOS shell scripts: sintaxis comprobada.
-- Windows batch: revisado y cubierto por la matriz CI declarada; requiere runner/PC Windows para certificación real.
-- Marking Studio puede vivir en Linux aunque la estación use Sculpfun Space/LightBurn en Windows/macOS.
-
-## Corrección de enfoque S9 Pro
-
-Durante esta revisión se corrigió una referencia previa de 20 mm. El manual oficial **SCULPFUN S9 Pro** enlazado en el centro de descargas especifica foco fijo **50 mm debajo del borde de la carcasa de aluminio del módulo** y columna de medición de 50 mm. La documentación y el perfil de máquina de v0.5 ya reflejan 50 mm.
-
-## Validación del paquete final
-
-El ZIP final se extrajo en un directorio temporal independiente y se comprobó como si fuera una entrega recibida:
-
-- `PROJECT_FILE_HASHES.sha256`: **159/159 PASS**;
-- `compileall`: **PASS**;
-- `pytest`: **41/41 PASS**;
-- JavaScript: **PASS**;
-- compatibilidad/preflight: **PASS**;
-- importadores de configuración: **4/4 PASS**;
-- interoperabilidad SVG: **PASS**;
-- `/api/health`: **200 / v0.5.0 / licencia standalone válida**.
-
-Esta prueba detecta, entre otras cosas, archivos omitidos del empaquetado, diferencias entre el árbol fuente y el ZIP y dependencias accidentales de archivos de runtime locales.
-
-## Pendientes que sólo se pueden cerrar físicamente
-
-1. Capturar el preset real que el área ya usa hoy.
-2. Medir la base/jig real y sustituir offsets/pitch estimados.
-3. Grabar material de descarte/carcasa fuera de servicio.
-4. Probar Code 128 con el LS2208 real.
-5. Probar QR de teléfono con el lector/cámara previsto.
-6. Confirmar que la superficie no se deforma ni degrada.
-7. Repetir al menos 20 lecturas consecutivas por estándar candidato.
-8. Aprobar y versionar el preset/jig final.
-
-## Conclusión
-
-La **herramienta de software** cumple el alcance previsto para pasar a piloto de taller. La frontera física está explícitamente bloqueada hasta disponer de máquina/material/lector reales; esto evita declarar como “validado” algo que sólo se simuló digitalmente.
+- JavaScript syntax check;
+- contrato de IDs HTML/JS;
+- fallback API/static;
+- health/catalog/calibración;
+- pruebas de endpoints del diseñador y CSV.

@@ -92,7 +92,7 @@ LightBurn reparte información entre:
 - proyectos;
 - preferencias y bundles.
 
-Marking Studio v0.5 puede conservar esos artefactos con hash y extraer los campos legibles. La aplicación no intenta escribirlos de vuelta.
+Marking Studio v0.6 conserva esos artefactos con hash y extrae los campos legibles. La aplicación no intenta escribirlos de vuelta.
 
 ### Descubrimiento automático
 
@@ -228,7 +228,7 @@ Mantener la frontera por archivos y presets. No integrar control directo de pote
 
 ## LaserGRBL y ajustes existentes
 
-La base de materiales de LaserGRBL en Windows se almacena en archivos `.psh` XML bajo `%APPDATA%\LaserGRBL`. Marking Studio 0.5 añade detección/importación read-only de `UserMaterials.psh`/`StandardMaterials.psh`, además de captura manual de ajustes del taller. Esto permite preservar conocimiento existente aunque el área no use LightBurn Material Library.
+La base de materiales de LaserGRBL en Windows se almacena en archivos `.psh` XML bajo `%APPDATA%\LaserGRBL`. Marking Studio 0.6 incluye detección/importación read-only de `UserMaterials.psh`/`StandardMaterials.psh`, además de captura manual de ajustes del taller. Esto permite preservar conocimiento existente aunque el área no use LightBurn Material Library.
 
 ## 15. Decisiones descartadas
 
@@ -244,3 +244,10 @@ La base de materiales de LaserGRBL en Windows se almacena en archivos `.psh` XML
 ## 16. Criterio de terminación del software vs aprobación física
 
 El software puede cerrarse técnicamente con tests de generación, parsing, seguridad, compatibilidad y decodificación. La aprobación física requiere la SCULPFUN real, el material real y el lector real. Esa frontera queda documentada y no se sustituye con simulación.
+
+
+## Actualización 2026-09-12 — Steren COM-597 real del área
+
+La etiqueta inferior visible en la fotografía identifica un **Steren COM-597** (5 V, 300 mA USB). Esto corrige la hipótesis conservadora de un Steren 1D genérico para ese puesto. El COM-597 es un imager 1D/2D y admite Code 128, QR y Data Matrix. Se conserva el perfil 1D genérico porque podrían existir otros lectores en operación.
+
+Decisión: no cambiar las plantillas por esta capacidad extra. INOVA/Sercel continúan con Code 128 + texto por velocidad e inspección visual; teléfonos continúan con QR + económico. El COM-597 puede verificar ambos flujos con un solo dispositivo.

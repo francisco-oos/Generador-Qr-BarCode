@@ -41,6 +41,19 @@
       "manufacturer_id": "Q00525499",
       "operational_id": "Q00525499",
       "asset_id": "NODE-00525499"
+    },
+    "primary_identity_field": "manufacturer_id",
+    "csv_aliases": {
+      "manufacturer_id": [
+        "manufacturer_id",
+        "serial",
+        "serie",
+        "nodo",
+        "node",
+        "id",
+        "numero",
+        "número"
+      ]
     }
   },
   "input_rules": [

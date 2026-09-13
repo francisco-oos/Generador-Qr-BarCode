@@ -1,7 +1,7 @@
 # Interoperabilidad con SCULPFUN, LightBurn, Sculpfun Space, LaserGRBL y futuras máquinas
 
 Fecha de revisión: 2026-09-12  
-Versión del proyecto: 0.5.0
+Versión del proyecto: 0.6.0
 
 ## 1. Principio de arquitectura
 
@@ -138,7 +138,7 @@ Referencias:
 - proyecto/software: https://github.com/arkypita/LaserGRBL
 - base de materiales del usuario: `%APPDATA%\LaserGRBL\UserMaterials.psh`
 
-Marking Studio 0.5 puede detectar/importar en Windows, en modo read-only:
+Marking Studio 0.6 puede detectar/importar en Windows, en modo read-only:
 
 - `UserMaterials.psh`;
 - `UserMaterial.psh` (compatibilidad con variantes históricas de nombre);

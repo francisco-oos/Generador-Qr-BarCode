@@ -40,7 +40,7 @@ El perfil de material aprobado debe vivir fuera del motor de diseño y asociarse
 Para cada candidato de configuración:
 
 1. Grabar al menos 20 IDs/pruebas consecutivas distintas.
-2. Confirmar lectura con el **lector real de operación**, incluyendo el LS2208 observado.
+2. Confirmar lectura con el **lector real de operación**. El equipo confirmado por fotografía es Steren COM-597; si existe una estación con LS2208 u otro lector 1D, repetir también allí.
 3. Probar lectura en al menos:
    - frontal normal;
    - ligera inclinación;

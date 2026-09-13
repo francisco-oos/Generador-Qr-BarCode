@@ -21,8 +21,14 @@ def normalize_identifier(value: str) -> str:
     return re.sub(r"\s+", "", (value or "").strip()).upper()
 
 
-def parse_csv_text(text: str) -> tuple[list[str], list[dict[str, str]]]:
-    # utf-8-sig allows Excel CSV exports with BOM.
+def parse_csv_text(text: str, has_header: bool | None = None) -> tuple[list[str], list[dict[str, str]]]:
+    """Parse spreadsheet-style CSV or a plain one-column identifier list.
+
+    ``has_header=None`` uses ``csv.Sniffer`` but falls back conservatively.  A
+    headerless file such as one serial per line becomes a generic ``value``
+    column and the first identifier is preserved instead of being lost as a
+    field name.
+    """
     if text.startswith("\ufeff"):
         text = text.lstrip("\ufeff")
     sample = text[:4096]
@@ -30,14 +36,34 @@ def parse_csv_text(text: str) -> tuple[list[str], list[dict[str, str]]]:
         dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
     except csv.Error:
         dialect = csv.excel
-    reader = csv.DictReader(io.StringIO(text), dialect=dialect)
-    if not reader.fieldnames:
-        raise ValueError("CSV sin encabezados")
-    headers = [str(h).strip() for h in reader.fieldnames]
+    rows_raw = [row for row in csv.reader(io.StringIO(text), dialect=dialect) if any(str(v).strip() for v in row)]
+    if not rows_raw:
+        raise ValueError("Archivo sin datos")
+    width = max(len(r) for r in rows_raw)
+    if has_header is None:
+        try:
+            detected = csv.Sniffer().has_header(sample)
+        except csv.Error:
+            detected = False
+        # For a one-column sequence of IDs, Sniffer can over-fit the first ID as
+        # a heading. Treat it as a list unless the first token looks explicitly
+        # like a field name commonly used in spreadsheets.
+        if width == 1:
+            first = str(rows_raw[0][0]).strip()
+            looks_like_label = first.lower() in {"serial", "serie", "id", "asset_id", "manufacturer_id", "economic_number", "numero", "número", "value", "valor"}
+            detected = bool(detected and looks_like_label)
+        has_header = detected
+    if has_header:
+        headers = [str(v).strip() or f"col_{i+1}" for i, v in enumerate(rows_raw[0])]
+        data_rows = rows_raw[1:]
+    else:
+        headers = ["value"] if width == 1 else [f"col_{i+1}" for i in range(width)]
+        data_rows = rows_raw
     rows: list[dict[str, str]] = []
-    for raw in reader:
-        row = {str(k).strip(): "" if v is None else str(v).strip() for k, v in raw.items() if k is not None}
-        if any(v for v in row.values()):
+    for raw in data_rows:
+        padded = list(raw) + [""] * (len(headers) - len(raw))
+        row = {headers[i]: str(padded[i]).strip() for i in range(len(headers))}
+        if any(row.values()):
             rows.append(row)
     return headers, rows
 
@@ -123,17 +149,16 @@ def render_batch(
         row = apply_input_rules(template, raw_row, capture_mode="import")
         slot = slots[a.slot_index]
 
-        # Resolve the best candidate ID for physical reconciliation after template
-        # import rules. Default policy is as-is, so CSV identifiers are never
-        # double-prefixed unless a template explicitly opts in.
-        candidate = (
-            row.get("manufacturer_id")
-            or row.get("operational_id")
-            or row.get("asset_id")
-            or row.get("serial")
-            or row.get("economic_number")
-            or ""
-        )
+        # Physical reconciliation is template-driven.  Equipment-specific field
+        # names are configuration, not core logic.  Prefer the template's declared
+        # identity field, then its first expected field, then the first non-empty
+        # imported value as a safe generic fallback.
+        primary_field = str(template.metadata.get("primary_identity_field", "")).strip()
+        candidate = str(row.get(primary_field, "")).strip() if primary_field else ""
+        if not candidate and template.expected_fields:
+            candidate = str(row.get(template.expected_fields[0], "")).strip()
+        if not candidate:
+            candidate = next((str(v).strip() for v in row.values() if str(v).strip()), "")
         match: bool | None = None
         if a.physical_id is not None and a.physical_id.strip() != "":
             match = normalize_identifier(a.physical_id) == normalize_identifier(candidate)

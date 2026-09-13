@@ -1,4 +1,4 @@
-# Server Oficina Marking Studio v0.5.0
+# Server Oficina Marking Studio v0.6.0
 
 Generador local y auditable de **marcado físico de activos** para Server Oficina. Convierte identidades provenientes de captura manual, CSV o futura BD en texto + Code 128/QR/Data Matrix, las posiciona sobre jigs/bases, exige conciliación física y entrega archivos a Sculpfun Space/LightBurn/LaserGRBL sin controlar directamente el láser.
 
@@ -8,9 +8,13 @@ Un nodo sin etiqueta puede seguir siendo reconocible si se le graba `Q00525499`,
 
 El sufijo INOVA `-xx` no se inventa. Se conserva como dato adicional cuando exista, pero el estándar operativo inicial usa el identificador realmente utilizado por la operación.
 
-## Novedades v0.5
+## Novedades v0.6
 
-- **Modo Guiado / Experto** para que un operador ocasional vea sólo el flujo esencial y un técnico pueda acceder a calibración, archivos de configuración y diagnóstico.
+- **Estudio visual de marcado**: crea, duplica y edita plantillas con clic o arrastrando directamente texto/serie, Code 128, Code 39, QR, Data Matrix, rectángulos y líneas; la vista real se recalcula con el mismo motor de producción.
+- CSV flexible: encabezados automáticos/forzados/sin encabezado, listas de una sola columna y mapeo de campos sin depender de nombres rígidos.
+- Exportación masiva de un SVG por fila (hasta 10 000 por solicitud), además del lote colocado sobre jig.
+- Identidad principal, alias CSV, prefijos/sufijos y posiciones viven en la plantilla, no en ramas hardcodeadas del frontend.
+- **Modo Guiado / Experto** para que un operador ocasional vea sólo el flujo esencial y un técnico pueda acceder a calibración, JSON, archivos de configuración y diagnóstico.
 - asistente de prefijo/sufijo: captura manual `525499` + prefijo `Q00` → `Q00525499`; CSV permanece **as-is** por defecto;
 - calibración de jigs con puntos `P0`, `PX`, `PY`, SVG `CALIBRATION ONLY` y evaluación de traslación/escala/escuadra;
 - corrección de referencia de foco: el manual oficial **SCULPFUN S9 Pro** revisado indica **50 mm** bajo el borde inferior del módulo usando su columna de 50 mm;
@@ -115,6 +119,7 @@ Empiece por:
 - `docs/MATERIAL_PRESETS_AND_PHONE_SURFACES.md`;
 - `docs/OPERATING_STANDARD.md`;
 - `docs/CSV_AND_TEMPLATE_GUIDE.md`;
+- `docs/VISUAL_TEMPLATE_STUDIO.md` — diseñador visual, campos y exportación masiva;
 - `docs/COMPATIBILITY_MATRIX.md`;
 - `docs/SERVER_OFICINA_INTEGRATION.md`;
 - `docs/LICENSE_ARCHITECTURE.md`;

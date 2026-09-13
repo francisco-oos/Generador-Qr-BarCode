@@ -75,3 +75,12 @@ La arquitectura preferida para producción futura es mantener la estación de gr
 ## Sculpfun Space
 
 SCULPFUN publica Sculpfun Space para Windows 10+ y macOS 13+, compatible con máquinas SCULPFUN no-galvo. Admite SVG, PNG, códigos de barras/QR, array layout, batch processing y presets/pruebas de material. Marking Studio usa ese software como otra ruta de handoff sin duplicar el control de la máquina.
+
+
+## Lector real confirmado — Steren COM-597
+
+La fotografía aportada permite identificar el lector como **Steren COM-597**. El manual oficial de Steren especifica sensor planar CMOS, USB, 200 scans/s, contraste soportado >30 %, resolución QR 8.7 mil y soporte explícito para Code 128, QR y Data Matrix.
+
+Implicación: el mismo lector puede validar **Code 128 de nodos** y **QR de teléfonos**. La plantilla INOVA usa X-dimension nominal de 0.33 mm (~13 mil) y la plantilla de teléfono usa módulo QR de 0.50 mm (~19.7 mil), por encima de la resolución QR documentada. Esto es margen geométrico, no certificación del contraste sobre una carcasa real.
+
+Fuentes: manual oficial Steren COM-597 (`descargas.steren.com.mx/COM-597-V1.1-instr.pdf`) y ficha comercial Steren/retail vigente consultada 2026-09-12.

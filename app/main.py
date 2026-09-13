@@ -40,7 +40,7 @@ from .db import (
     record_shop_material_preset,
     verify_mark,
 )
-from .exporters import build_batch_zip, svg_to_png
+from .exporters import build_batch_zip, build_bulk_template_zip, svg_to_png
 from .licensing import get_license_provider
 from .machine_bridge import (
     compare_grbl_to_profile,
@@ -68,6 +68,8 @@ from .models import (
     ScanVerifyRequest,
     TemplateInputRuleUpdateRequest,
     TemplateSaveRequest,
+    TemplatePreviewRequest,
+    BulkTemplateExportRequest,
 )
 from .template_engine import apply_input_rules, render_template
 from .calibration import calibration_target_svg, evaluate_reference_points, jig_reference_points
@@ -75,7 +77,7 @@ from .material_catalog import phone_reference, search_material_reference
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "app" / "static"
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 
 
 @asynccontextmanager
@@ -189,7 +191,7 @@ def render(req: RenderRequest):
 
 
 @app.post("/api/csv/inspect")
-async def csv_inspect(file: UploadFile = File(...)) -> dict[str, Any]:
+async def csv_inspect(file: UploadFile = File(...), header_mode: str = "auto") -> dict[str, Any]:
     _require_license()
     raw = await file.read()
     if len(raw) > 15 * 1024 * 1024:
@@ -199,7 +201,10 @@ async def csv_inspect(file: UploadFile = File(...)) -> dict[str, Any]:
     except UnicodeDecodeError:
         text = raw.decode("latin-1")
     try:
-        headers, rows = parse_csv_text(text)
+        mode = {"yes": True, "no": False, "auto": None}.get(header_mode)
+        if header_mode not in {"yes", "no", "auto"}:
+            raise ValueError("header_mode debe ser auto, yes o no")
+        headers, rows = parse_csv_text(text, has_header=mode)
     except Exception as exc:
         raise HTTPException(400, f"CSV inválido: {exc}") from exc
     return {
@@ -208,6 +213,7 @@ async def csv_inspect(file: UploadFile = File(...)) -> dict[str, Any]:
         "count": len(rows),
         "rows": rows,
         "preview": rows[:20],
+        "header_mode": header_mode,
     }
 
 
@@ -326,6 +332,80 @@ def scan_verify(req: ScanVerifyRequest) -> dict[str, Any]:
 def get_history(limit: int = 100) -> dict[str, Any]:
     _require_license()
     return {"items": history(max(1, min(limit, 1000)))}
+
+
+
+
+@app.post("/api/templates/preview")
+def preview_template_api(req: TemplatePreviewRequest):
+    """Render a visual-designer draft without saving or touching machine state."""
+    _require_license()
+    quality = load_quality_profiles().get(req.template.quality_profile)
+    if not quality:
+        raise HTTPException(400, f"Perfil de calidad no encontrado: {req.template.quality_profile}")
+    try:
+        normalized = apply_input_rules(req.template, req.data, capture_mode=req.capture_mode)
+        mark = render_template(req.template, quality, normalized)
+    except Exception as exc:
+        raise HTTPException(400, f"No fue posible previsualizar la plantilla: {exc}") from exc
+    if req.output == "png":
+        dpi = req.dpi or quality.render_dpi
+        return Response(content=svg_to_png(mark.svg, mark.width_mm, mark.height_mm, dpi=dpi), media_type="image/png")
+    return {
+        "svg": mark.svg, "width_mm": mark.width_mm, "height_mm": mark.height_mm,
+        "warnings": mark.warnings, "resolved": mark.resolved,
+    }
+
+
+@app.post("/api/bulk/svg-export")
+def bulk_svg_export(req: BulkTemplateExportRequest):
+    """Generate up to 10k individual SVGs from one saved template and mapped rows."""
+    _require_license()
+    template = load_templates().get(req.template_id)
+    if not template:
+        raise HTTPException(404, f"Plantilla no encontrada: {req.template_id}")
+    quality = load_quality_profiles().get(template.quality_profile)
+    if not quality:
+        raise HTTPException(500, f"Perfil de calidad no encontrado: {template.quality_profile}")
+
+    def safe_name(value: str, index: int) -> str:
+        base = re.sub(r"[^A-Za-z0-9._-]+", "_", value.strip())[:100].strip("._-")
+        return base or f"mark_{index:05d}"
+
+    items: list[dict[str, Any]] = []
+    used: dict[str, int] = {}
+    warnings: list[str] = []
+    for index, row in enumerate(req.rows, start=1):
+        normalized = apply_input_rules(template, row, capture_mode="import")
+        mark = render_template(template, quality, normalized)
+        if mark.warnings:
+            warnings.extend([f"fila {index}: {w}" for w in mark.warnings])
+        value = ""
+        if req.filename_field:
+            value = str(normalized.get(req.filename_field, ""))
+        if not value:
+            primary = str(template.metadata.get("primary_identity_field", ""))
+            if primary:
+                value = str(normalized.get(primary, ""))
+        if not value and template.expected_fields:
+            value = str(normalized.get(template.expected_fields[0], ""))
+        filename = safe_name(value, index)
+        count = used.get(filename, 0) + 1
+        used[filename] = count
+        if count > 1:
+            filename = f"{filename}_{count:03d}"
+        items.append({"filename": filename, "svg": mark.svg, "data": normalized})
+
+    payload = build_bulk_template_zip(items, {
+        "template_id": template.id, "record_count": len(items),
+        "warning_count": len(warnings), "warnings": warnings[:500],
+        "machine_control": False,
+        "handoff": "Importar SVG en LightBurn/Sculpfun Space u otro software compatible.",
+    })
+    return Response(
+        content=payload, media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{template.id}-svg-bulk.zip"', "X-Record-Count": str(len(items))},
+    )
 
 
 @app.post("/api/templates/save")

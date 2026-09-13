@@ -40,7 +40,8 @@ DESPUÉS: código grabado == ID esperado
 - SCULPFUN S9 Pro 10W existente;
 - PC existente;
 - LightBurn o LaserGRBL;
-- lector 1D Zebra/Symbol LS2208 observado;
+- lector real confirmado Steren COM-597 (1D/2D, Code 128/QR/Data Matrix);
+- compatibilidad conservada con lectores 1D tipo Zebra/Symbol LS2208;
 - bases/jigs actuales, una vez medidas/calibradas.
 
 ## Piloto sugerido

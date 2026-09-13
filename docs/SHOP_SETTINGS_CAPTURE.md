@@ -52,7 +52,7 @@ Esta lectura recupera límites/configuración del controlador, **no** la velocid
 
 ## LightBurn Material Test y `.lbmt`
 
-LightBurn permite guardar/exportar presets de Material Test como `.lbmt`. Marking Studio v0.5 extrae:
+LightBurn permite guardar/exportar presets de Material Test como `.lbmt`. Marking Studio v0.6 extrae:
 
 - parámetro X/Y probado;
 - mínimo/máximo y número de muestras;
@@ -98,7 +98,7 @@ Si cambia cualquiera de esos componentes, se crea una nueva revisión; no se sob
 
 ## LaserGRBL `.psh`
 
-En Windows, LaserGRBL conserva una base de materiales de usuario en `%APPDATA%\LaserGRBL\UserMaterials.psh` y una base estándar puede aparecer como `StandardMaterials.psh`. Marking Studio 0.5 puede detectarlas/importarlas en modo sólo lectura, convertir campos reconocibles (modelo/material/operación/velocidad/potencia/ciclos) a presets portables y guardar hash/origen.
+En Windows, LaserGRBL conserva una base de materiales de usuario en `%APPDATA%\LaserGRBL\UserMaterials.psh` y una base estándar puede aparecer como `StandardMaterials.psh`. Marking Studio 0.6 puede detectarlas/importarlas en modo sólo lectura, convertir campos reconocibles (modelo/material/operación/velocidad/potencia/ciclos) a presets portables y guardar hash/origen.
 
 El importador acepta también `UserMaterial.psh` por compatibilidad con variantes históricas de nombre. No modifica ni sobrescribe la base de LaserGRBL.
 

@@ -10,7 +10,7 @@
   <header class="topbar">
     <div>
       <div class="eyebrow">SERVER OFICINA</div>
-      <h1>Marking Studio <span class="version">v0.5</span></h1>
+      <h1>Marking Studio <span class="version">v0.6</span></h1>
       <p>Identificación física estandarizada · QR · Code 128 · Data Matrix · lotes CSV</p>
     </div>
     <div class="top-actions"><div class="mode-switch" aria-label="Modo de experiencia"><button id="guidedModeBtn" class="mode active">Modo guiado</button><button id="expertModeBtn" class="mode">Modo experto</button></div><div id="licenseBadge" class="badge">Cargando licencia…</div></div>
@@ -20,7 +20,7 @@
     <button data-tab="individual" class="active">Generador</button>
     <button data-tab="batch">Lotes / CSV</button>
     <button data-tab="verify">Verificar escaneo</button>
-    <button data-tab="config">Plantillas</button>
+    <button data-tab="config">Estudio visual</button>
     <button data-tab="history">Histórico</button>
     <button data-tab="materials">Materiales / Presets</button>
     <button data-tab="calibration">Calibración</button>
@@ -57,15 +57,16 @@
           <label>Plantilla<select id="batchTemplate"></select></label>
           <label>Jig / base<select id="batchJig"></select></label>
           <label>Preset de material / grabado<select id="batchMaterialPreset"><option value="">— ninguno / definir en LightBurn —</option></select></label>
-          <label>Archivo CSV<input id="csvFile" type="file" accept=".csv,.txt" /></label>
+          <label>Archivo CSV / lista<input id="csvFile" type="file" accept=".csv,.txt" /></label>
+          <label>Encabezados<select id="csvHeaderMode"><option value="auto">Detectar automáticamente</option><option value="yes">La primera fila es encabezado</option><option value="no">Lista sin encabezado</option></select></label>
           <div class="series-box">
             <div class="panel-head"><strong>O generar una serie controlada</strong><span class="muted">opcional</span></div>
             <div class="form-grid compact">
-              <label>Campo<input id="seriesField" value="manufacturer_id" /></label>
-              <label>Prefijo<input id="seriesPrefix" value="Q00" /></label>
-              <label>Inicio<input id="seriesStart" type="number" min="0" value="525499" /></label>
-              <label>Dígitos numéricos<input id="seriesWidth" type="number" min="0" max="32" value="6" /></label>
-              <label>Cantidad<input id="seriesCount" type="number" min="1" max="100000" value="1000" /></label>
+              <label>Campo<input id="seriesField" placeholder="serial" /></label>
+              <label>Prefijo<input id="seriesPrefix" /></label>
+              <label>Inicio<input id="seriesStart" type="number" min="0" value="1" /></label>
+              <label>Dígitos numéricos<input id="seriesWidth" type="number" min="0" max="32" value="0" /></label>
+              <label>Cantidad<input id="seriesCount" type="number" min="1" max="100000" value="100" /></label>
               <label>Sufijo<input id="seriesSuffix" value="" /></label>
             </div>
             <button id="generateSeriesBtn">Generar registros</button>
@@ -73,6 +74,7 @@
           </div>
           <div id="csvInfo" class="messages"></div>
           <div id="fieldMapping" class="form-grid"></div>
+          <div class="series-box"><div class="panel-head"><strong>Vista previa del primer registro</strong><span class="muted">se actualiza con el mapeo</span></div><div id="batchRecordPreview" class="mini-preview"><span class="muted">Cargue datos para previsualizar.</span></div><div id="batchPreviewMsg" class="messages"></div></div>
           <div class="inline">
             <label>Inicio del lote<input id="batchOffset" type="number" min="0" value="0" /></label>
             <button id="prepareBatchBtn" class="primary">Preparar posiciones</button>
@@ -89,7 +91,7 @@
           <div id="jigGrid" class="jig-grid"></div>
           <div id="assignmentTable"></div>
           <div class="actions">
-            <button id="exportBatchBtn" class="primary">Exportar trabajo ZIP</button>
+            <button id="exportBatchBtn" class="primary">Exportar trabajo ZIP</button><button id="exportAllSvgBtn">Generar SVG individuales del CSV</button>
           </div>
           <div id="batchMessages" class="messages"></div>
         </article>
@@ -99,7 +101,7 @@
     <section id="tab-verify" class="tab">
       <article class="panel narrow">
         <h2>Verificación posterior al grabado</h2>
-        <p>Coloque el cursor en “Escaneado” y dispare el lector. El LS2208 / lector USB funciona como teclado.</p>
+        <p>Coloque el cursor en “Escaneado” y dispare el lector. El Steren COM-597 y otros lectores USB tipo teclado escriben aquí el código leído. Si usa otro lector, seleccione una simbología compatible con ese equipo.</p>
         <label>ID esperado<input id="verifyExpected" autocomplete="off" /></label>
         <label>Escaneado<input id="verifyScanned" autocomplete="off" /></label>
         <label class="check"><input id="verifyNormalize" type="checkbox" /> Ignorar espacios/minúsculas (no recomendado para validación estricta)</label>
@@ -109,37 +111,94 @@
     </section>
 
     <section id="tab-config" class="tab">
-      <div class="grid two">
-        <article class="panel">
-          <h2>Plantillas de marcado</h2>
-          <p class="hint">Las medidas, campos y simbologías viven en JSON. Clone una plantilla para un equipo nuevo sin modificar el motor.</p>
-          <label>Plantilla<select id="configTemplate"></select></label>
+      <div class="guided-card guided-only"><strong>Estudio visual:</strong> seleccione una plantilla existente para editarla, duplíquela o cree una nueva. Arrastre elementos en el lienzo, vincúlelos a campos y guarde el perfil. Los datos reales se sustituyen después de forma manual o desde cualquier CSV.</div>
+      <article class="panel designer-header">
+        <div class="designer-head-grid">
+          <label>Plantilla base<select id="configTemplate"></select></label>
+          <div class="actions designer-actions"><button id="newTemplateBtn">Nueva en blanco</button><button id="duplicateTemplateBtn">Duplicar</button><button id="saveVisualTemplateBtn" class="primary">Guardar plantilla</button></div>
+          <label>Nombre<input id="designerName" /></label>
+          <label>ID técnico<input id="designerId" /></label>
+          <label>Categoría<input id="designerCategory" placeholder="phone, node_inova, custom…" /></label>
+          <label>Ancho mm<input id="designerWidth" type="number" min="1" step="0.1" /></label>
+          <label>Alto mm<input id="designerHeight" type="number" min="1" step="0.1" /></label>
+          <label>Perfil de calidad<select id="designerQuality"></select></label>
+        </div>
+        <div id="designerSaveMsg" class="messages"></div>
+      </article>
+
+      <div class="designer-layout section-gap">
+        <aside class="panel designer-toolbox">
+          <h2>Elementos</h2>
+          <p class="hint">Pulse para agregar o arrastre directamente el elemento al lugar deseado del lienzo.</p>
+          <div class="tool-list">
+            <button data-add-kind="text" data-role="variable">Texto / serie</button>
+            <button data-add-kind="text" data-role="literal">Texto fijo</button>
+            <button data-add-kind="code128">Code 128</button>
+            <button data-add-kind="code39">Code 39</button>
+            <button data-add-kind="qr">QR</button>
+            <button data-add-kind="datamatrix">Data Matrix</button>
+            <button data-add-kind="rect">Rectángulo</button>
+            <button data-add-kind="line">Línea</button>
+          </div>
+          <h2 class="section-gap">Campos de datos</h2>
+          <p class="hint">Son las variables que podrá capturar o mapear desde un CSV.</p>
+          <div class="inline"><input id="designerNewField" placeholder="serial" /><button id="designerAddFieldBtn">Agregar</button></div>
+          <div id="designerFieldsList" class="field-chips"></div>
           <div class="series-box">
-            <div class="panel-head"><strong>Asistente de captura manual</strong><span class="muted">prefijo / sufijo</span></div>
-            <p class="hint">Configure aquí cómo se completa una captura manual. Las listas CSV se mantienen “tal cual” por defecto para no duplicar prefijos.</p>
-            <div class="form-grid compact">
-              <label>Campo<select id="ruleField"></select></label>
-              <label class="check"><input id="rulePrefixEnabled" type="checkbox" /> Usar prefijo al capturar a mano</label>
-              <label>Prefijo<input id="rulePrefix" placeholder="Q00" /></label>
-              <label class="check"><input id="ruleSuffixEnabled" type="checkbox" /> Usar sufijo al capturar a mano</label>
-              <label>Sufijo<input id="ruleSuffix" placeholder="" /></label>
-              <label>Valores importados<select id="ruleImportedMode"><option value="as_is">Usar tal cual vienen en CSV</option><option value="ensure_prefix_suffix">Asegurar prefijo/sufijo también en CSV</option></select></label>
-              <label class="check"><input id="ruleUppercase" type="checkbox" /> Convertir a mayúsculas</label>
-            </div>
-            <button id="saveInputRuleBtn">Guardar regla de captura</button>
+            <strong>Regla de captura</strong>
+            <label>Campo<select id="ruleField"></select></label>
+            <label class="check"><input id="rulePrefixEnabled" type="checkbox" /> Añadir prefijo sólo en captura manual</label>
+            <label>Prefijo<input id="rulePrefix" placeholder="Ej. Q00, TEL-, EQ-" /></label>
+            <label class="check"><input id="ruleSuffixEnabled" type="checkbox" /> Añadir sufijo sólo en captura manual</label>
+            <label>Sufijo<input id="ruleSuffix" /></label>
+            <label>CSV<select id="ruleImportedMode"><option value="as_is">Respetar exactamente el CSV</option><option value="ensure_prefix_suffix">Asegurar prefijo/sufijo</option></select></label>
+            <label class="check"><input id="ruleUppercase" type="checkbox" /> Mayúsculas</label>
+            <button id="saveInputRuleBtn">Aplicar regla al borrador</button>
             <div id="inputRuleMsg" class="messages"></div>
           </div>
-          <textarea id="templateJson" class="expert-only" spellcheck="false"></textarea>
-          <button id="saveTemplateBtn" class="primary expert-only">Guardar plantilla JSON</button>
-          <div id="templateSaveMsg" class="messages"></div>
+        </aside>
+
+        <article class="panel designer-stage-panel">
+          <div class="panel-head"><h2>Lienzo de plantilla</h2><span id="designerSizeLabel" class="muted"></span></div>
+          <div class="designer-canvas-wrap"><div id="designerCanvas" class="designer-canvas"></div></div>
+          <p class="hint">Arrastre objetos para moverlos. El borde azul es sólo de edición y no se exporta. Use las propiedades para medidas exactas.</p>
+          <div class="panel-head section-gap"><h2>Vista real SVG</h2><span class="muted">render del mismo motor de producción</span></div>
+          <div id="designerDataFields" class="form-grid compact"></div>
+          <div id="designerPreview" class="preview designer-real-preview"><span class="muted">Seleccione o cree una plantilla.</span></div>
+          <div id="designerWarnings" class="messages"></div>
         </article>
-        <article class="panel">
-          <h2>Jigs / bases</h2>
-          <label>Jig<select id="configJig"></select></label>
-          <textarea id="jigJson" class="expert-only" spellcheck="false"></textarea>
-          <button id="saveJigBtn" class="primary expert-only">Guardar jig JSON</button>
-          <div id="jigSaveMsg" class="messages"></div>
-        </article>
+
+        <aside class="panel designer-properties">
+          <div class="panel-head"><h2>Propiedades</h2><span id="designerSelectionLabel" class="muted">sin selección</span></div>
+          <div id="designerNoSelection" class="muted">Seleccione un elemento del lienzo.</div>
+          <div id="designerPropertyForm" hidden>
+            <label>Etiqueta<input id="propLabel" /></label>
+            <label>Tipo<input id="propKind" disabled /></label>
+            <label>Campo fuente<select id="propSource"></select></label>
+            <label>Texto fijo / formato<input id="propLiteral" placeholder="Ej. ACTIVO {serial}" /></label>
+            <div class="form-grid compact">
+              <label>X mm<input id="propX" type="number" step="0.1" /></label>
+              <label>Y mm<input id="propY" type="number" step="0.1" /></label>
+              <label>Ancho mm<input id="propWidth" type="number" step="0.1" /></label>
+              <label>Alto mm<input id="propHeight" type="number" step="0.1" /></label>
+              <label>Tamaño texto mm<input id="propFont" type="number" step="0.1" /></label>
+              <label>Módulo mm<input id="propModule" type="number" step="0.01" /></label>
+            </div>
+            <label>Alineación<select id="propAlign"><option value="left">Izquierda</option><option value="center">Centro</option><option value="right">Derecha</option></select></label>
+            <label>Corrección QR<select id="propEc"><option>L</option><option selected>M</option><option>Q</option><option>H</option></select></label>
+            <div class="actions"><button id="duplicateElementBtn">Duplicar elemento</button><button id="deleteElementBtn" class="danger">Eliminar</button></div>
+          </div>
+          <div class="series-box section-gap">
+            <strong>Identidad principal</strong>
+            <label>Campo usado para conciliación / nombre de archivo<select id="designerPrimaryField"></select></label>
+            <p class="hint">No está fijado en el código: cada plantilla decide cuál es su identidad operativa.</p>
+          </div>
+        </aside>
+      </div>
+
+      <div class="grid two section-gap expert-only">
+        <article class="panel"><h2>JSON de la plantilla</h2><textarea id="templateJson" spellcheck="false"></textarea><button id="saveTemplateBtn" class="primary">Guardar JSON</button><div id="templateSaveMsg" class="messages"></div></article>
+        <article class="panel"><h2>Jigs / bases</h2><label>Jig<select id="configJig"></select></label><textarea id="jigJson" spellcheck="false"></textarea><button id="saveJigBtn" class="primary">Guardar jig JSON</button><div id="jigSaveMsg" class="messages"></div></article>
       </div>
     </section>
 

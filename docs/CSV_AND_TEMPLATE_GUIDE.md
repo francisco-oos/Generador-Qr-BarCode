@@ -1,90 +1,83 @@
-# Guía de CSV, plantillas y jigs
+# Guía de CSV, plantillas y jigs — v0.6
 
-## CSV
+## Archivos de datos
 
-La aplicación acepta CSV con delimitador coma, punto y coma o tab, y UTF-8 con BOM (típico de Excel). La UI permite mapear columnas del archivo a los campos esperados por la plantilla.
+Se aceptan coma, punto y coma o tab y UTF-8 con BOM. También se admite una lista de una sola columna sin encabezado.
 
-Ejemplo INOVA:
+Ejemplo mínimo:
+
+```text
+Q00525499
+Q00525500
+Q00525501
+```
+
+Ejemplo estructurado:
 
 ```csv
-manufacturer_id,asset_id
-Q00525499,NODE-00525499
-Q00503416,NODE-00503416
+serial,economico,modelo
+Q00525499,N-184,INOVA
+Q00525500,N-185,INOVA
 ```
 
-Ejemplo teléfonos:
+El usuario elige `auto`, `con encabezado` o `sin encabezado`. Una lista sin encabezado recibe `value`; archivos multicolumna reciben `col_1`, `col_2`, etc.
 
-```csv
-asset_id,economic_number
-PHONE-000037,TEL-0037
-PHONE-000038,TEL-0038
+## Mapeo
+
+La aplicación no exige un nombre de columna global. Cada plantilla declara sus campos. Al cargar datos:
+
+1. igualdad exacta por nombre;
+2. alias declarados en `metadata.csv_aliases` de la propia plantilla;
+3. coincidencia genérica sencilla;
+4. decisión manual del usuario.
+
+Si sólo hay una columna, se propone para todos los campos variables y el usuario puede cambiarlo.
+
+Esto elimina tablas de sinónimos de INOVA/Sercel/teléfono dentro del código.
+
+## Identidad para conciliación
+
+Cada plantilla declara `metadata.primary_identity_field`. Ese campo es el que se usa preferentemente para:
+
+- comparación `esperado ↔ escrito/escaneado`;
+- nombre del SVG individual;
+- lectura rápida en la tabla del jig.
+
+Ya no existe un orden hardcodeado de `manufacturer_id`, `asset_id`, etc.
+
+## Diseñar una plantilla
+
+Use **Estudio visual**. El resultado sigue siendo un `TemplateSpec` JSON versionable. Los campos soportados son:
+
+`text`, `code128`, `code39`, `qr`, `datamatrix`, `rect`, `line`.
+
+Los elementos pueden tener `source` (campo variable) o `literal`. Un literal de texto puede usar formato, por ejemplo `ACTIVO {serial}`.
+
+## Prefijo/sufijo
+
+`input_rules` diferencia captura manual de importación. Ejemplo:
+
+```text
+manual 525499 + Q00 → Q00525499
+CSV Q00525499        → Q00525499
 ```
 
-## Reconciliación física
+La política importada por defecto es `as_is`.
 
-El lote no confía ciegamente en el orden del CSV. Para cada posición se solicita el ID escrito/leído en la pieza. El backend calcula el candidato en este orden:
+## Exportaciones
 
-1. `manufacturer_id`
-2. `operational_id`
-3. `asset_id`
-4. `serial`
-5. `economic_number`
+### Jig
 
-Si `physical_id != candidate`, la exportación falla.
+Genera un trabajo físico con posiciones confirmadas, SVG combinado, preview de la base y manifiestos.
 
-## Plantillas
+### Individual masivo
 
-Una plantilla describe una marca física. Ejemplo conceptual:
-
-```json
-{
-  "id": "mi_equipo_v1",
-  "width_mm": 50,
-  "height_mm": 18,
-  "quality_profile": "rugged_field_v1",
-  "elements": [
-    {
-      "kind": "code128",
-      "source": "manufacturer_id|asset_id",
-      "x_mm": 1,
-      "y_mm": 1,
-      "width_mm": 48
-    },
-    {
-      "kind": "text",
-      "source": "manufacturer_id|asset_id",
-      "x_mm": 25,
-      "y_mm": 17,
-      "font_size_mm": 4,
-      "align": "center"
-    }
-  ]
-}
-```
-
-Los campos soportados son `text`, `code128`, `code39`, `qr`, `datamatrix`, `rect`, `line`.
+Genera un SVG por fila con la misma plantilla y un manifiesto. Se utiliza cuando el acomodo final se hará después en LightBurn/Sculpfun Space u otro programa compatible.
 
 ## Jigs
 
-Un jig define una cuadrícula repetible sobre la cama:
-
-- filas/columnas;
-- origen X/Y;
-- pitch X/Y;
-- tamaño de slot;
-- offset del marcado dentro de cada slot;
-- slots deshabilitados.
-
-No hay coordenadas específicas de INOVA codificadas en Python. Para otra base física sólo se crea un JSON.
+Un jig sigue siendo configuración: filas/columnas, origen, pitch, tamaño de slot, offset y slots deshabilitados. Las coordenadas no están codificadas en Python.
 
 ## Versionado
 
-Nunca cambiar una plantilla productiva aprobada de forma silenciosa. Crear `*_v2` si una modificación cambia:
-
-- tamaño físico;
-- payload;
-- simbología;
-- posición;
-- módulo/quiet zone de forma relevante.
-
-Así el histórico puede reconstruir exactamente qué se grabó.
+No cambiar silenciosamente una plantilla aprobada si modifica payload, tamaño, simbología, posición o calidad. Crear una revisión (`*_v2`) para conservar trazabilidad histórica.

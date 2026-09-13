@@ -30,11 +30,11 @@ def api_static_fallback() -> dict:
     result: dict[str, object] = {}
     with TestClient(app) as client:
         health = client.get("/api/health")
-        result["health"] = health.status_code == 200 and health.json().get("version") == "0.5.0"
+        result["health"] = health.status_code == 200 and health.json().get("version") == "0.6.0"
         index = client.get("/")
         text = index.text
         result["index"] = index.status_code == 200
-        result["guided_controls"] = all(x in text for x in ("guidedModeBtn", "expertModeBtn", "calibration"))
+        result["guided_controls"] = all(x in text for x in ("guidedModeBtn", "expertModeBtn", "calibration", "designerCanvas", "saveVisualTemplateBtn"))
         catalog = client.get("/api/catalog")
         result["catalog"] = catalog.status_code == 200 and len(catalog.json().get("templates", [])) >= 5
         calib = client.get("/api/calibration/jig/inova_tray_3x4_estimate")
@@ -92,6 +92,13 @@ def main() -> None:
                 page.set_input_files("#csvFile", str(ROOT / "samples/input/inova_1200.csv"))
                 page.wait_for_timeout(300)
                 browser_results["csv_1200"] = "1200 registros" in page.locator("#csvInfo").inner_text()
+                browser_results["batch_preview"] = page.locator("#batchRecordPreview svg").count() > 0
+                page.click('[data-tab="config"]')
+                page.click("#newTemplateBtn")
+                page.click('[data-add-kind="code128"]')
+                page.wait_for_timeout(250)
+                browser_results["visual_designer_object"] = page.locator("#designerCanvas .design-object").count() == 1
+                browser_results["visual_designer_svg"] = page.locator("#designerPreview svg").count() > 0
                 page.screenshot(path=str(OUT / "ui_smoke_expert.png"), full_page=True)
                 page.click("#guidedModeBtn")
                 page.click('[data-tab="individual"]')

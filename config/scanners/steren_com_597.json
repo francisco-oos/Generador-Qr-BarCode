@@ -1,0 +1,22 @@
+{
+  "id": "steren_com_597",
+  "name": "Steren COM-597 — lector 1D/2D USB",
+  "technology": "2D planar CMOS imager",
+  "interfaces": ["USB", "RS-232"],
+  "symbologies": [
+    "Code 128", "Code 39", "Code 93", "Codabar", "Interleaved 2 of 5",
+    "Industrial 2 of 5", "Matrix 2 of 5", "Code 11", "UPC-A", "UPC-E",
+    "EAN/JAN-8", "EAN/JAN-13", "GS1-128", "GS1 DataBar", "QR",
+    "Micro QR", "Data Matrix", "PDF417", "Aztec"
+  ],
+  "supports_qr": true,
+  "supports_datamatrix": true,
+  "minimum_print_contrast_percent": 30,
+  "notes": [
+    "Modelo identificado en la fotografía aportada por la etiqueta inferior: COM-597, alimentación 5 V / 300 mA por USB.",
+    "Manual oficial Steren: sensor planar CMOS, 200 lecturas/s, contraste soportado >30%, QR documentado a 8.7 mil y Code 39 a 4 mil.",
+    "Code 128 está explícitamente soportado y habilitable en el manual; por ello es apto para el flujo INOVA/Sercel propuesto.",
+    "QR y Data Matrix también están soportados; el COM-597 puede validar teléfonos además de nodos, a diferencia de un lector 1D puro.",
+    "La compatibilidad lógica no sustituye la aceptación física: el grabado real debe conservar bordes nítidos, quiet zone y contraste suficiente sobre cada material."
+  ]
+}

@@ -46,7 +46,7 @@ La S9 Pro publicada actualmente es un diodo de hasta 10 W y área 400 × 410 mm.
 
 LightBurn incorpora `Laser Tools → Material Test` para generar una matriz que varía velocidad, potencia, intervalo, pasadas u otros parámetros. Los presets de Material Test pueden exportarse/importarse como `.lbmt`; LightBurn también mantiene Material Libraries `.clb` para ajustes reutilizables.
 
-Marking Studio v0.5 puede:
+Marking Studio v0.6 puede:
 
 - importar `.lbmt`;
 - importar `.clb`;

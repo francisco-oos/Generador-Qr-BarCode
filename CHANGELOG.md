@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.6.0 — 2026-09-12
+
+- Replanteado el producto como **Estudio visual de marcado con plantillas**, no sólo selector de perfiles predefinidos.
+- Añadido diseñador visual: crear/duplicar plantilla, agregar texto/serie, texto fijo, Code 128, Code 39, QR, Data Matrix, rectángulo y línea; arrastrar elementos y ajustar geometría en mm.
+- Añadida vista real SVG en vivo usando el mismo motor de renderizado productivo mediante `/api/templates/preview`; el borrador no se persiste hasta guardarlo.
+- Añadidos campos de datos configurables, identidad principal por plantilla y reglas de prefijo/sufijo aplicables al borrador.
+- Eliminado del frontend el orden rígido de IDs y la tabla fija de sinónimos de CSV; los alias pasan a `metadata.csv_aliases` de cada plantilla.
+- CSV ampliado con detección automática/forzada de encabezados y soporte de listas de una sola columna sin perder la primera serie.
+- Cuando sólo hay una columna, se propone automáticamente para los campos de la plantilla; el mapeo continúa siendo editable.
+- Añadida vista previa del primer registro CSV al cambiar el mapeo.
+- Añadida exportación masiva de **un SVG por fila** hasta 10 000 registros, además del flujo por jig.
+- Eliminados defaults INOVA específicos del generador de series; ahora toma campo/prefijo/sufijo desde la plantilla seleccionada.
+- Mantiene el handoff seguro: Marking Studio genera arte; LightBurn/Sculpfun Space/LaserGRBL controla la máquina.
+- QA ampliado a 48 pruebas automatizadas; exportación masiva validada con 1 000 y 5 000 SVG; 28/28 simulaciones de lectura y 12/12 Code 128 del jig.
+- Documentación añadida/actualizada: `VISUAL_TEMPLATE_STUDIO.md`, manual rápido, arquitectura y guía CSV.
+
+## 0.5.1 — 2026-09-12
+
+- Identificado e incorporado el lector real Steren COM-597 visto en la fotografía.
+- Perfil 1D/2D con Code 128, QR y Data Matrix; contraste documental >30 %.
+- QA específico: la plantilla QR de teléfono mantiene módulo 0.50 mm (~19.7 mil), con margen sobre los 8.7 mil documentados para QR.
+- Se mantiene Code 128 para nodos y QR para teléfonos; el mismo COM-597 puede verificar ambos.
+- Documentado procedimiento de aceptación física específico para el lector.
+
 ## 0.5.0 — 2026-09-12
 
 - Añadidos modos **Guiado** y **Experto**.

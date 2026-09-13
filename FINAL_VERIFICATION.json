@@ -1,69 +1,45 @@
 {
   "project": "Server Oficina Marking Studio",
-  "version": "0.5.0",
-  "status": "READY_FOR_PHYSICAL_PILOT",
-  "validated_on": "2026-09-12",
-  "final_gate": {
+  "version": "0.6.0",
+  "generated_at_utc": "2026-09-12T14:15:36.196386+00:00",
+  "status": "PASS_SOFTWARE_READY_FOR_CONTROLLED_PHYSICAL_PILOT",
+  "scope": {
+    "visual_template_studio": "PASS — click + drag/drop, mm geometry, live production-engine SVG preview",
+    "csv_flexibility": "PASS — auto/forced headers, headerless one-column lists, multi-column mapping, template-owned aliases",
+    "hardcoding_reduction": "PASS — operational identity/prefix/suffix/CSV aliases/elements live in template/configuration",
+    "bulk_generation": "PASS — one SVG per row up to 10000/request; tested 1000 and 5000",
+    "machine_boundary": "PASS — document handoff only; no production movement/power commands",
+    "shop_settings": "PASS — read-only import/capture of LightBurn/LaserGRBL/GRBL data",
+    "calibration": "PASS — P0/PX/PY diagnostic SVG/evaluation; physical jig approval still required",
+    "scanner_profile": "PASS — Steren COM-597 documented; legacy 1D compatibility retained"
+  },
+  "qa": {
+    "pytest": "48/48 PASS",
     "python_compileall": "PASS",
-    "javascript_syntax": "PASS",
-    "pytest": "41/41 PASS",
-    "runtime_api_health": "PASS",
-    "compatibility_preflight": "PASS",
+    "javascript_node_check": "PASS",
+    "compatibility_check": "PASS",
     "scan_simulation": "28/28 PASS",
-    "batch_full_image_decode": "12/12 Code128 PASS",
-    "scalability_1200_records": "PASS",
-    "grbl_serial_readonly_simulation": "PASS",
-    "svg_interoperability": "PASS",
-    "calibration_svg_interoperability": "PASS",
-    "browser_e2e": "SKIP_POLICY",
-    "browser_api_static_fallback": "PASS",
-    "bash_launcher_syntax": "PASS",
-    "configuration_file_imports": "4/4 PASS (.clb/.lbmt/.psh/GRBL text)",
-    "http_csv_multipart_1200": "PASS",
-    "package_reextract_validation": "PASS (159/159 hashes + compile + 41 tests + JS + compatibility + imports + SVG + API health)"
+    "inova_3x4_decode": "12/12 PASS",
+    "svg_interop": "PASS (XML + svglib + Inkscape)",
+    "configuration_importers": "4/4 PASS",
+    "grbl_readonly_simulator": "PASS — only $I and $$",
+    "benchmark": {
+      "records": 1200,
+      "jig_capacity": 12,
+      "physical_loads": 100,
+      "individual_renders": 2500,
+      "seconds": 5.172,
+      "renders_per_second": 483.3,
+      "batch_vector_1200_seconds": 2.428,
+      "full_bed_png_300dpi_seconds": 5.371
+    },
+    "browser_e2e": "SKIP_POLICY — Chromium localhost blocked by runtime; API/HTML fallback PASS"
   },
-  "benchmark": {
-    "records_input": 1200,
-    "jig_capacity": 12,
-    "batches_for_1200": 100,
-    "individual_render_2500_seconds": 5.005,
-    "individual_render_2500_per_second": 499.5,
-    "process_peak_rss_delta_mib": 5.62,
-    "checksum": 16219920,
-    "batch_vector_render_1200_seconds": 2.433,
-    "batch_records_produced": 1200,
-    "last_full_bed_png_300dpi_seconds": 5.69,
-    "last_full_bed_png_bytes": 175034,
-    "status": "PASS"
+  "platform_validation": {
+    "executed_host": "Linux 6.18.35 / Python 3.13.5",
+    "launchers_present": "Windows/Linux/macOS PASS",
+    "cross_platform_note": "Source/config/launcher compatibility is checked here; Windows/macOS execution requires real host or CI runner."
   },
-  "catalog": {
-    "templates": 5,
-    "machines": 2,
-    "jigs": 5,
-    "scanners": 3,
-    "material_references": 19,
-    "phone_references": 6
-  },
-  "focus_reference": {
-    "machine": "SCULPFUN S9 Pro",
-    "mm": 50,
-    "source": "Official S9 Pro manual linked by SCULPFUN download center",
-    "note": "50 mm below lower edge of aluminum module shell using supplied measuring column."
-  },
-  "physical_test_required": true,
-  "physical_test_reason": "Laser/material/focus/contrast, actual jig dimensions and real scanner reliability cannot be certified without the installed SCULPFUN, real housings and operational reader.",
-  "direct_laser_control": false,
-  "handoff": [
-    "Sculpfun Space SVG/PNG",
-    "LightBurn SVG",
-    "LaserGRBL compatible file workflow"
-  ],
-  "notes": [
-    "INOVA operational IDs are encoded exactly as known; no -xx suffix is inferred.",
-    "Manual capture can add a configured prefix; imported CSV remains as-is by default.",
-    "Code 128 is primary for nodes using the existing 1D LS2208-class reader; QR/Data Matrix require 2D/camera reading.",
-    "Existing shop-validated machine/material settings take priority over researched reference ranges.",
-    "Browser E2E was skipped by sandbox localhost policy; API/HTML contract and JavaScript syntax passed.",
-    "Jig definitions marked calibration_required remain non-production until physically measured."
-  ]
+  "package_reextract_validation": "PASS — archive re-extracted in a clean directory; 165 packaged source files verified by SHA-256 manifest, compileall/JS syntax/48 tests/compatibility/28 scan simulations/12-slot decode/SVG/importer/GRBL/browser-fallback gates passed, and /api/health reported v0.6.0.",
+  "physical_limits": "Laser/material/focus/contrast/jig repeatability are not digitally certified. Use the documented physical acceptance plan and shop-validated presets."
 }

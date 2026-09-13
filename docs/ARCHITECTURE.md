@@ -24,7 +24,7 @@ Batch + Jig Engine
 SVG/PNG + manifiesto + histórico
           │
           ▼
-LightBurn / LaserGRBL
+Sculpfun Space / LightBurn / LaserGRBL
           │
           ▼
 SCULPFUN / futura grabadora
@@ -73,7 +73,9 @@ Aplicación web local sin framework JS externo. Permite:
 - asignar posiciones del jig;
 - verificar el ID físico;
 - exportar lotes consecutivos;
-- editar plantillas/jigs JSON;
+- crear/editar plantillas con un estudio visual drag-and-drop;
+- previsualizar borradores sin persistirlos;
+- editar plantillas/jigs JSON en modo experto;
 - consultar histórico y perfiles de máquina/lector.
 
 ## Modelo de plantillas
@@ -142,3 +144,13 @@ Esto permite un formulario cómodo sin reinterpretar datasets proporcionados por
 ### Portabilidad
 
 FastAPI y los motores son independientes del SO. La comunicación serial usa `pyserial`; la enumeración funciona en Windows/Linux/macOS. El control de la grabadora sigue delegado al software de máquina, lo que evita ligar el core a drivers específicos.
+
+## Extensión v0.6 — Estudio visual y datos libres
+
+El diseñador visual es una capa de autoría sobre el mismo `TemplateSpec`. No existe un segundo formato propietario: mover un objeto modifica `x_mm/y_mm`, y la vista real llama a `render_template`. Por ello lo que el operador ve se valida con el mismo motor que produce el SVG final.
+
+Los perfiles INOVA/Sercel/Teléfono son **datos iniciales**, no condiciones del motor. `primary_identity_field`, `csv_aliases`, prefijos, dimensiones y elementos viven en JSON.
+
+El CSV admite tres modos de encabezado y listas sin encabezado. Si sólo existe una columna, puede alimentar automáticamente uno o varios campos de la plantilla. Con varias columnas el mapeo es explícito.
+
+`/api/bulk/svg-export` produce un SVG individual por fila (hasta 10 000) sin G-code ni control de máquina. El flujo de producción sigue terminando en el software del láser.

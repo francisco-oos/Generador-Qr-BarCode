@@ -38,6 +38,17 @@
     "example_data": {
       "asset_id": "PHONE-000037",
       "economic_number": "TEL-0037"
+    },
+    "primary_identity_field": "economic_number",
+    "csv_aliases": {
+      "economic_number": [
+        "economic_number",
+        "economico",
+        "económico",
+        "numero_economico",
+        "número económico",
+        "id"
+      ]
     }
   },
   "input_rules": [
