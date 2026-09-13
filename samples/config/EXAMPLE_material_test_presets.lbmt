@@ -1,0 +1,15 @@
+{
+  "DEMO - material test": {
+    "XParam": "Speed",
+    "XMin": 1000,
+    "XMax": 3000,
+    "XCount": 5,
+    "YParam": "Power",
+    "YMin": 10,
+    "YMax": 40,
+    "YCount": 4,
+    "MaterialCut": {"type": "Scan", "speed": 2000, "maxPower": 25, "interval": 0.08, "numPasses": 1},
+    "TextCut": {"type": "Line", "speed": 3000, "maxPower": 15},
+    "BorderCut": {"type": "Line", "speed": 3000, "maxPower": 15}
+  }
+}

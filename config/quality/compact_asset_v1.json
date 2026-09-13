@@ -1,0 +1,16 @@
+{
+  "id": "compact_asset_v1",
+  "name": "Activo compacto v1",
+  "code128_module_mm": 0.28,
+  "code128_quiet_modules": 10,
+  "code128_bar_height_mm": 9.0,
+  "qr_module_mm": 0.40,
+  "qr_quiet_modules": 4,
+  "datamatrix_module_mm": 0.35,
+  "datamatrix_quiet_modules": 1,
+  "render_dpi": 600,
+  "notes": [
+    "Usar solo tras validar con el lector real; rugged_field_v1 es preferible cuando hay espacio.",
+    "No reducir módulos para hacer caber un código si puede reducirse el contenido o ampliarse la zona de marcado."
+  ]
+}

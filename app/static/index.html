@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Server Oficina Marking Studio</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">SERVER OFICINA</div>
+      <h1>Marking Studio <span class="version">v0.5</span></h1>
+      <p>Identificación física estandarizada · QR · Code 128 · Data Matrix · lotes CSV</p>
+    </div>
+    <div class="top-actions"><div class="mode-switch" aria-label="Modo de experiencia"><button id="guidedModeBtn" class="mode active">Modo guiado</button><button id="expertModeBtn" class="mode">Modo experto</button></div><div id="licenseBadge" class="badge">Cargando licencia…</div></div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="individual" class="active">Generador</button>
+    <button data-tab="batch">Lotes / CSV</button>
+    <button data-tab="verify">Verificar escaneo</button>
+    <button data-tab="config">Plantillas</button>
+    <button data-tab="history">Histórico</button>
+    <button data-tab="materials">Materiales / Presets</button>
+    <button data-tab="calibration">Calibración</button>
+    <button data-tab="system">Sistema</button>
+  </nav>
+
+  <main>
+    <section id="tab-individual" class="tab active">
+      <div class="guided-card guided-only"><strong>Flujo rápido:</strong> 1) elija plantilla → 2) escriba el ID → 3) revise la vista previa → 4) exporte SVG → 5) abra en LightBurn/Sculpfun Space → 6) aplique el ajuste del área, haga Frame y grabe → 7) escanee para verificar.</div>
+      <div class="grid two">
+        <article class="panel">
+          <h2>Generar marcado individual</h2>
+          <label>Plantilla<select id="individualTemplate"></select></label>
+          <div id="individualFields" class="form-grid"></div>
+          <div class="actions">
+            <button id="renderBtn" class="primary">Actualizar vista previa</button>
+            <button id="downloadSvgBtn">Descargar SVG</button>
+            <button id="downloadPngBtn">Descargar PNG 600 DPI</button>
+          </div>
+          <div id="renderWarnings" class="messages"></div>
+        </article>
+        <article class="panel preview-panel">
+          <div class="panel-head"><h2>Vista previa</h2><span id="markSize" class="muted"></span></div>
+          <div id="preview" class="preview"><span class="muted">Seleccione plantilla y datos.</span></div>
+          <p class="hint">El SVG es el formato recomendado para LightBurn o Sculpfun Space. El PNG a 600 DPI es una alternativa raster para LaserGRBL.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="tab-batch" class="tab">
+      <div class="grid two">
+        <article class="panel">
+          <h2>1. Cargar lote</h2>
+          <label>Plantilla<select id="batchTemplate"></select></label>
+          <label>Jig / base<select id="batchJig"></select></label>
+          <label>Preset de material / grabado<select id="batchMaterialPreset"><option value="">— ninguno / definir en LightBurn —</option></select></label>
+          <label>Archivo CSV<input id="csvFile" type="file" accept=".csv,.txt" /></label>
+          <div class="series-box">
+            <div class="panel-head"><strong>O generar una serie controlada</strong><span class="muted">opcional</span></div>
+            <div class="form-grid compact">
+              <label>Campo<input id="seriesField" value="manufacturer_id" /></label>
+              <label>Prefijo<input id="seriesPrefix" value="Q00" /></label>
+              <label>Inicio<input id="seriesStart" type="number" min="0" value="525499" /></label>
+              <label>Dígitos numéricos<input id="seriesWidth" type="number" min="0" max="32" value="6" /></label>
+              <label>Cantidad<input id="seriesCount" type="number" min="1" max="100000" value="1000" /></label>
+              <label>Sufijo<input id="seriesSuffix" value="" /></label>
+            </div>
+            <button id="generateSeriesBtn">Generar registros</button>
+            <p class="hint">Sólo para numeraciones cuya regla esté confirmada. No reconstruye seriales de fabricante perdidos por inferencia.</p>
+          </div>
+          <div id="csvInfo" class="messages"></div>
+          <div id="fieldMapping" class="form-grid"></div>
+          <div class="inline">
+            <label>Inicio del lote<input id="batchOffset" type="number" min="0" value="0" /></label>
+            <button id="prepareBatchBtn" class="primary">Preparar posiciones</button>
+            <button id="nextBatchBtn">Siguiente lote</button>
+          </div>
+          <div id="batchProgress" class="batch-progress muted">Sin lote cargado.</div>
+          <label class="check"><input id="requireConfirmation" type="checkbox" checked /> Exigir que el ID escrito físicamente coincida antes de exportar</label>
+          <button id="simulationFillBtn" class="secondary">Simulación: prellenar confirmaciones</button>
+          <p class="hint">En operación real, no use el botón de simulación: escriba/escanee el ID que ve en cada equipo. La exportación se bloquea si no coincide.</p>
+        </article>
+
+        <article class="panel">
+          <div class="panel-head"><h2>2. Posiciones del jig</h2><span id="jigCapacity" class="muted"></span></div>
+          <div id="jigGrid" class="jig-grid"></div>
+          <div id="assignmentTable"></div>
+          <div class="actions">
+            <button id="exportBatchBtn" class="primary">Exportar trabajo ZIP</button>
+          </div>
+          <div id="batchMessages" class="messages"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="tab-verify" class="tab">
+      <article class="panel narrow">
+        <h2>Verificación posterior al grabado</h2>
+        <p>Coloque el cursor en “Escaneado” y dispare el lector. El LS2208 / lector USB funciona como teclado.</p>
+        <label>ID esperado<input id="verifyExpected" autocomplete="off" /></label>
+        <label>Escaneado<input id="verifyScanned" autocomplete="off" /></label>
+        <label class="check"><input id="verifyNormalize" type="checkbox" /> Ignorar espacios/minúsculas (no recomendado para validación estricta)</label>
+        <button id="verifyBtn" class="primary">Comparar</button>
+        <div id="verifyResult" class="messages"></div>
+      </article>
+    </section>
+
+    <section id="tab-config" class="tab">
+      <div class="grid two">
+        <article class="panel">
+          <h2>Plantillas de marcado</h2>
+          <p class="hint">Las medidas, campos y simbologías viven en JSON. Clone una plantilla para un equipo nuevo sin modificar el motor.</p>
+          <label>Plantilla<select id="configTemplate"></select></label>
+          <div class="series-box">
+            <div class="panel-head"><strong>Asistente de captura manual</strong><span class="muted">prefijo / sufijo</span></div>
+            <p class="hint">Configure aquí cómo se completa una captura manual. Las listas CSV se mantienen “tal cual” por defecto para no duplicar prefijos.</p>
+            <div class="form-grid compact">
+              <label>Campo<select id="ruleField"></select></label>
+              <label class="check"><input id="rulePrefixEnabled" type="checkbox" /> Usar prefijo al capturar a mano</label>
+              <label>Prefijo<input id="rulePrefix" placeholder="Q00" /></label>
+              <label class="check"><input id="ruleSuffixEnabled" type="checkbox" /> Usar sufijo al capturar a mano</label>
+              <label>Sufijo<input id="ruleSuffix" placeholder="" /></label>
+              <label>Valores importados<select id="ruleImportedMode"><option value="as_is">Usar tal cual vienen en CSV</option><option value="ensure_prefix_suffix">Asegurar prefijo/sufijo también en CSV</option></select></label>
+              <label class="check"><input id="ruleUppercase" type="checkbox" /> Convertir a mayúsculas</label>
+            </div>
+            <button id="saveInputRuleBtn">Guardar regla de captura</button>
+            <div id="inputRuleMsg" class="messages"></div>
+          </div>
+          <textarea id="templateJson" class="expert-only" spellcheck="false"></textarea>
+          <button id="saveTemplateBtn" class="primary expert-only">Guardar plantilla JSON</button>
+          <div id="templateSaveMsg" class="messages"></div>
+        </article>
+        <article class="panel">
+          <h2>Jigs / bases</h2>
+          <label>Jig<select id="configJig"></select></label>
+          <textarea id="jigJson" class="expert-only" spellcheck="false"></textarea>
+          <button id="saveJigBtn" class="primary expert-only">Guardar jig JSON</button>
+          <div id="jigSaveMsg" class="messages"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="tab-history" class="tab">
+      <article class="panel">
+        <div class="panel-head"><h2>Histórico local de marcados</h2><button id="refreshHistoryBtn">Actualizar</button></div>
+        <div id="historyTable" class="table-wrap"></div>
+      </article>
+    </section>
+
+
+    <section id="tab-materials" class="tab">
+      <div class="grid two">
+        <article class="panel">
+          <h2>Biblioteca de materiales</h2>
+          <p class="hint">Referencia de investigación para SCULPFUN S9 Pro / diodo azul 10 W. Los rangos publicados sirven sólo para iniciar pruebas; un ajuste ya validado por el área sobre la misma máquina, material y superficie tiene prioridad.</p>
+          <div class="form-grid compact">
+            <label>Buscar material<input id="materialSearch" placeholder="madera, vidrio, aluminio, plástico…" /></label>
+            <label>Categoría<select id="materialCategory"><option value="">Todas</option><option value="wood">Madera</option><option value="paper">Papel/cartón</option><option value="leather">Cuero</option><option value="glass">Vidrio</option><option value="metal">Metal</option><option value="metal_tag">Etiqueta metálica</option><option value="ceramic">Cerámica</option><option value="plastic">Plástico</option><option value="phone">Teléfono</option></select></label>
+          </div>
+          <div class="actions"><button id="searchMaterialsBtn" class="primary">Consultar referencia</button></div>
+          <div id="materialPolicy" class="messages"></div>
+          <div id="materialsResults" class="cards-list"></div>
+        </article>
+        <article class="panel">
+          <h2>Superficies de teléfonos</h2>
+          <p class="hint">La marca por sí sola no determina el material. Consulte el modelo exacto y use el ajuste local ya probado cuando exista. Si la composición no está confirmada, la alternativa segura es una placa/etiqueta apta para láser.</p>
+          <div class="form-grid compact">
+            <label>Marca<input id="phoneBrand" placeholder="CUBOT, UMIDIGI, Xiaomi/Redmi" /></label>
+            <label>Modelo<input id="phoneModel" placeholder="KingKong 9, BISON X10, Note 14…" /></label>
+          </div>
+          <div class="actions"><button id="searchPhoneBtn" class="primary">Investigar modelo</button></div>
+          <div id="phoneResults" class="cards-list"></div>
+          <h2 class="section-gap">Jerarquía de ajustes</h2>
+          <ol class="priority-list">
+            <li><strong>Ajuste del área ya validado</strong> para la misma SCULPFUN, material/superficie y operación.</li>
+            <li>Recomendación específica del fabricante, si existe y corresponde al mismo equipo.</li>
+            <li>Rango de investigación como punto de partida.</li>
+            <li>Material Test conservador y aprobación local antes de producción.</li>
+          </ol>
+          <div class="msg warn">No se publica un “preset universal para plástico” ni un preset directo para un teléfono ensamblado de material desconocido.</div>
+          <h2 class="section-gap">Capturar ajuste ya validado por el área</h2>
+          <p class="hint">Use esto para conservar los valores que hoy ya producen un grabado visible. El sistema no los envía al láser: quedan auditados para repetirlos en LightBurn, Sculpfun Space o LaserGRBL.</p>
+          <div class="form-grid compact">
+            <label>Máquina<select id="shopPresetMachine"></select></label>
+            <label>Nombre<input id="shopPresetName" placeholder="KingKong 9 - trasera - QR" /></label>
+            <label>Material/superficie<input id="shopPresetMaterial" placeholder="carcasa trasera / placa" /></label>
+            <label>Modelo/equipo<input id="shopPresetSurface" placeholder="CUBOT KingKong 9" /></label>
+            <label>Operación<select id="shopPresetOperation"><option value="engrave">Grabado</option><option value="mark">Marcado</option></select></label>
+            <label>Velocidad mm/min<input id="shopPresetSpeed" type="number" min="1" step="1" /></label>
+            <label>Potencia %<input id="shopPresetPower" type="number" min="0.1" max="100" step="0.1" /></label>
+            <label>Pasadas<input id="shopPresetPasses" type="number" min="1" value="1" /></label>
+            <label>Intervalo mm (opcional)<input id="shopPresetInterval" type="number" min="0.001" step="0.001" /></label>
+            <label>Referencia foco mm (opcional)<input id="shopPresetFocus" type="number" min="0.1" step="0.1" /></label>
+            <label>Modo láser<select id="shopPresetLaserMode"><option value="unknown">No registrado</option><option value="M4">M4 dinámico</option><option value="M3">M3 constante</option></select></label>
+          </div>
+          <label class="check"><input id="shopPresetValidated" type="checkbox" /> Confirmo que este ajuste ya fue probado en esta misma máquina y superficie</label>
+          <label>Notas<input id="shopPresetNotes" placeholder="Contraste visible, fecha, operador, observaciones…" /></label>
+          <button id="saveShopPresetBtn" class="primary">Guardar ajuste del área</button>
+          <div id="shopPresetMsg" class="messages"></div>
+
+        </article>
+      </div>
+    </section>
+
+
+    <section id="tab-calibration" class="tab">
+      <div class="grid two">
+        <article class="panel">
+          <h2>Calibrar base / puntos de referencia</h2>
+          <div class="guided-card guided-only">Para la S9 Pro base, trate la posición como relativa hasta confirmar que existen y funcionan finales de carrera/homing. Use un jig fijo, un datum físico y Frame antes de producción.</div>
+          <label>Jig<select id="calibrationJig"></select></label>
+          <div class="actions"><button id="loadCalibrationBtn" class="primary">Generar referencias</button><button id="downloadCalibrationBtn">Descargar SVG de calibración</button></div>
+          <div id="calibrationInstructions" class="messages"></div>
+          <div id="calibrationPoints"></div>
+        </article>
+        <article class="panel preview-panel">
+          <div class="panel-head"><h2>Patrón de referencia</h2><span class="muted">NO grabar sobre equipo bueno</span></div>
+          <div id="calibrationPreview" class="preview"><span class="muted">Seleccione un jig.</span></div>
+          <div class="expert-only section-gap">
+            <h2>Evaluar medición P0 / PX / PY</h2>
+            <div id="calibrationMeasured" class="form-grid compact"></div>
+            <button id="evaluateCalibrationBtn">Evaluar geometría</button>
+            <pre id="calibrationResult"></pre>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="tab-system" class="tab">
+      <div class="grid two">
+        <article class="panel">
+          <h2>Licencia</h2><pre id="licenseJson"></pre>
+          <h2 class="section-gap">Leer configuración existente</h2>
+          <p class="hint">Importe archivos exportados por LightBurn o un texto de GRBL. La importación es de solo lectura: no modifica la grabadora.</p>
+          <label>Máquina asociada<select id="machineImportProfile"></select></label>
+          <label>Archivo LightBurn / GRBL<input id="machineConfigFile" type="file" accept=".clb,.lbset,.lbmt,.lbprefs,.ini,.lbrn,.lbrn2,.lbzip,.zip,.psh,.txt,.log" /></label>
+          <button id="importMachineConfigBtn" class="primary">Importar configuración</button>
+          <div id="machineImportMsg" class="messages"></div>
+          <div class="series-box">
+            <div class="panel-head"><strong>Detectar LightBurn instalado</strong><span class="muted">solo lectura</span></div>
+            <p class="hint">Busca preferencias, Material Test (.lbmt), librerías (.clb), proyectos y respaldos en las rutas locales conocidas. No cambia LightBurn ni la controladora.</p>
+            <div class="actions"><button id="discoverLightBurnBtn">Detectar archivos locales</button></div>
+            <label>Artefacto detectado<select id="lightburnArtifact"><option value="">— detectar primero —</option></select></label>
+            <button id="importDetectedLightBurnBtn" class="primary">Importar artefacto seleccionado</button>
+            <div id="lightburnDiscoveryMsg" class="messages"></div>
+          </div>
+
+          <div class="series-box expert-only">
+            <div class="panel-head"><strong>Detectar LaserGRBL instalado</strong><span class="muted">Windows · solo lectura</span></div>
+            <p class="hint">Busca UserMaterials.psh / StandardMaterials.psh en AppData para rescatar la biblioteca de materiales que ya usa el área.</p>
+            <div class="actions"><button id="discoverLaserGrblBtn">Detectar base LaserGRBL</button></div>
+            <label>Artefacto detectado<select id="lasergrblArtifact"><option value="">— detectar primero —</option></select></label>
+            <button id="importDetectedLaserGrblBtn" class="primary">Importar base seleccionada</button>
+            <div id="lasergrblDiscoveryMsg" class="messages"></div>
+          </div>
+          <pre id="machineImportResult" class="expert-only"></pre>
+        </article>
+        <article class="panel">
+          <h2>Perfiles de máquina</h2><div id="machinesList"></div>
+          <h2 class="section-gap expert-only">Diagnóstico GRBL seguro</h2>
+          <p class="hint expert-only">Detecta puertos y puede consultar únicamente <code>$I</code> y <code>$$</code>. No mueve ejes, no cambia parámetros y no enciende el láser. Cierre LightBurn/LaserGRBL antes de abrir el mismo puerto.</p>
+          <div class="form-grid compact expert-only">
+            <label>Puerto<select id="serialPort"></select></label>
+            <label>Baud<select id="serialBaud"><option>115200</option><option>57600</option><option>38400</option><option>9600</option></select></label>
+          </div>
+          <div class="actions expert-only"><button id="refreshPortsBtn">Detectar puertos</button><button id="probeGrblBtn" class="primary">Leer $I + $$</button></div>
+          <div id="grblMsg" class="messages expert-only"></div><pre id="grblResult" class="expert-only"></pre>
+          <h2 class="section-gap">Parámetros capturados</h2>
+          <button id="refreshCapturesBtn">Actualizar capturas</button>
+          <div id="capturesTable" class="table-wrap"></div>
+          <h2 class="section-gap">Lectores</h2><div id="scannersList"></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <strong>Regla operativa:</strong> generar → encuadrar/Frame → prueba en material de descarte → grabar → escanear → confirmar histórico.
+  </footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>

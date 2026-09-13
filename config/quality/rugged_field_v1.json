@@ -1,0 +1,18 @@
+{
+  "id": "rugged_field_v1",
+  "name": "Marcado robusto de campo v1",
+  "code128_module_mm": 0.33,
+  "code128_quiet_modules": 10,
+  "code128_bar_height_mm": 11.0,
+  "qr_module_mm": 0.50,
+  "qr_quiet_modules": 4,
+  "datamatrix_module_mm": 0.40,
+  "datamatrix_quiet_modules": 1,
+  "render_dpi": 600,
+  "notes": [
+    "Valores de diseño conservadores para maximizar legibilidad; no sustituyen verificación física.",
+    "Code 128 conserva al menos 10 módulos de zona silenciosa a cada lado.",
+    "QR conserva al menos 4 módulos de margen en los cuatro lados.",
+    "Para marcado directo por láser, validar contraste y daño superficial sobre muestra del mismo material."
+  ]
+}

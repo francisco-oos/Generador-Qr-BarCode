@@ -1,0 +1,17 @@
+{
+  "id": "generic_grbl",
+  "name": "Grabadora GRBL genérica",
+  "controller": "GRBL",
+  "connection": "USB serial",
+  "bed_width_mm": 400.0,
+  "bed_height_mm": 400.0,
+  "laser_wavelength_nm": null,
+  "optical_power_w": null,
+  "vector_formats": ["SVG"],
+  "raster_formats": ["PNG"],
+  "recommended_software": ["LightBurn Core", "LaserGRBL"],
+  "direct_machine_output_enabled": false,
+  "metadata": {
+    "purpose": "Perfil base editable para futuras grabadoras sin acoplar el motor de plantillas a SCULPFUN."
+  }
+}

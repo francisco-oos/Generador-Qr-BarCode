@@ -1,0 +1,45 @@
+{
+  "id": "sercel_dfu_code128_v1",
+  "name": "Sercel DFU — Code 128 + ID visual",
+  "version": "1.0",
+  "category": "node_sercel",
+  "description": "Plantilla de compatibilidad 1D para lectores tipo Zebra/Symbol LS2208 y lectores Steren 1D.",
+  "width_mm": 50.0,
+  "height_mm": 18.0,
+  "quality_profile": "rugged_field_v1",
+  "calibration_required": true,
+  "expected_fields": [
+    "manufacturer_id"
+  ],
+  "elements": [
+    {
+      "kind": "code128",
+      "x_mm": 1.0,
+      "y_mm": 0.5,
+      "source": "manufacturer_id|serial|asset_id",
+      "width_mm": 48.0,
+      "height_mm": 10.5,
+      "label": "Código 1D"
+    },
+    {
+      "kind": "text",
+      "x_mm": 1.0,
+      "y_mm": 16.2,
+      "source": "manufacturer_id|serial|asset_id",
+      "width_mm": 48.0,
+      "font_size_mm": 4.2,
+      "align": "center",
+      "label": "ID visual"
+    }
+  ],
+  "metadata": {
+    "note": "La foto muestra además un código 2D de fabricante. No se intenta clonarlo sin haber leído su contenido exacto.",
+    "scanner_compatibility": "Code 128 prioriza compatibilidad con el lector 1D mostrado en las fotos.",
+    "example_data": {
+      "manufacturer_id": "4281847",
+      "serial": "4281847",
+      "asset_id": "NODE-4281847"
+    }
+  },
+  "input_rules": []
+}

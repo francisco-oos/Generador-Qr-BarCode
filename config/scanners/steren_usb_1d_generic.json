@@ -1,0 +1,14 @@
+{
+  "id": "steren_usb_1d_generic",
+  "name": "Steren USB 1D — perfil compatible",
+  "technology": "1D laser",
+  "interfaces": ["USB"],
+  "symbologies": ["Code 128", "Code 93", "Code 39", "EAN-8", "EAN-13", "UPC-A", "UPC-E", "Interleaved 2 of 5"],
+  "supports_qr": false,
+  "supports_datamatrix": false,
+  "minimum_print_contrast_percent": null,
+  "notes": [
+    "Perfil conservador basado en las especificaciones públicas del lector USB 1D de Steren; validar el modelo exacto instalado en el taller.",
+    "La aplicación no depende de un modelo de lector: cualquier lector HID/keyboard wedge que decodifique Code 128 puede validar los nodos."
+  ]
+}

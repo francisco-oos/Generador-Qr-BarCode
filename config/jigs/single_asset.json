@@ -1,0 +1,24 @@
+{
+  "id": "single_asset",
+  "name": "Activo único — calibración",
+  "machine_profile_id": "sculpfun_s9_pro_10w",
+  "target_category": "generic",
+  "template_id": "generic_asset_qr_v1",
+  "grid": {
+    "rows": 1,
+    "cols": 1,
+    "origin_x_mm": 20.0,
+    "origin_y_mm": 20.0,
+    "pitch_x_mm": 80.0,
+    "pitch_y_mm": 80.0,
+    "mark_offset_x_mm": 10.0,
+    "mark_offset_y_mm": 10.0,
+    "slot_width_mm": 70.0,
+    "slot_height_mm": 70.0
+  },
+  "calibration_required": true,
+  "disabled_slots": [],
+  "metadata": {
+    "purpose": "Pruebas de material, enfoque y lectura antes de crear un jig definitivo."
+  }
+}

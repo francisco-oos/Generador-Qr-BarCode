@@ -1,0 +1,69 @@
+{
+  "project": "Server Oficina Marking Studio",
+  "version": "0.5.0",
+  "status": "READY_FOR_PHYSICAL_PILOT",
+  "validated_on": "2026-09-12",
+  "final_gate": {
+    "python_compileall": "PASS",
+    "javascript_syntax": "PASS",
+    "pytest": "41/41 PASS",
+    "runtime_api_health": "PASS",
+    "compatibility_preflight": "PASS",
+    "scan_simulation": "28/28 PASS",
+    "batch_full_image_decode": "12/12 Code128 PASS",
+    "scalability_1200_records": "PASS",
+    "grbl_serial_readonly_simulation": "PASS",
+    "svg_interoperability": "PASS",
+    "calibration_svg_interoperability": "PASS",
+    "browser_e2e": "SKIP_POLICY",
+    "browser_api_static_fallback": "PASS",
+    "bash_launcher_syntax": "PASS",
+    "configuration_file_imports": "4/4 PASS (.clb/.lbmt/.psh/GRBL text)",
+    "http_csv_multipart_1200": "PASS",
+    "package_reextract_validation": "PASS (159/159 hashes + compile + 41 tests + JS + compatibility + imports + SVG + API health)"
+  },
+  "benchmark": {
+    "records_input": 1200,
+    "jig_capacity": 12,
+    "batches_for_1200": 100,
+    "individual_render_2500_seconds": 5.005,
+    "individual_render_2500_per_second": 499.5,
+    "process_peak_rss_delta_mib": 5.62,
+    "checksum": 16219920,
+    "batch_vector_render_1200_seconds": 2.433,
+    "batch_records_produced": 1200,
+    "last_full_bed_png_300dpi_seconds": 5.69,
+    "last_full_bed_png_bytes": 175034,
+    "status": "PASS"
+  },
+  "catalog": {
+    "templates": 5,
+    "machines": 2,
+    "jigs": 5,
+    "scanners": 3,
+    "material_references": 19,
+    "phone_references": 6
+  },
+  "focus_reference": {
+    "machine": "SCULPFUN S9 Pro",
+    "mm": 50,
+    "source": "Official S9 Pro manual linked by SCULPFUN download center",
+    "note": "50 mm below lower edge of aluminum module shell using supplied measuring column."
+  },
+  "physical_test_required": true,
+  "physical_test_reason": "Laser/material/focus/contrast, actual jig dimensions and real scanner reliability cannot be certified without the installed SCULPFUN, real housings and operational reader.",
+  "direct_laser_control": false,
+  "handoff": [
+    "Sculpfun Space SVG/PNG",
+    "LightBurn SVG",
+    "LaserGRBL compatible file workflow"
+  ],
+  "notes": [
+    "INOVA operational IDs are encoded exactly as known; no -xx suffix is inferred.",
+    "Manual capture can add a configured prefix; imported CSV remains as-is by default.",
+    "Code 128 is primary for nodes using the existing 1D LS2208-class reader; QR/Data Matrix require 2D/camera reading.",
+    "Existing shop-validated machine/material settings take priority over researched reference ranges.",
+    "Browser E2E was skipped by sandbox localhost policy; API/HTML contract and JavaScript syntax passed.",
+    "Jig definitions marked calibration_required remain non-production until physically measured."
+  ]
+}

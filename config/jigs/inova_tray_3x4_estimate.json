@@ -1,0 +1,26 @@
+{
+  "id": "inova_tray_3x4_estimate",
+  "name": "Bandeja INOVA 3x4 — estimación inicial",
+  "machine_profile_id": "sculpfun_s9_pro_10w",
+  "target_category": "node_inova",
+  "template_id": "inova_quantum_code128_v1",
+  "grid": {
+    "rows": 4,
+    "cols": 3,
+    "origin_x_mm": 7.0,
+    "origin_y_mm": 6.0,
+    "pitch_x_mm": 126.0,
+    "pitch_y_mm": 99.0,
+    "mark_offset_x_mm": 35.0,
+    "mark_offset_y_mm": 67.0,
+    "slot_width_mm": 116.0,
+    "slot_height_mm": 96.0
+  },
+  "calibration_required": true,
+  "disabled_slots": [],
+  "metadata": {
+    "basis": "Foto aportada muestra una base de tres columnas; dimensiones del Quantum publicadas ~109 x 98 x 107 mm excluyendo spike.",
+    "warning": "Los offsets de marcado son una estimación. Medir la base real y ejecutar Frame/Preview antes de grabar.",
+    "capacity": 12
+  }
+}

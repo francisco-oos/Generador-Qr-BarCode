@@ -1,0 +1,11 @@
+{
+  "id": "generic_2d",
+  "name": "Lector 2D genérico",
+  "technology": "2D imager",
+  "interfaces": ["USB HID"],
+  "symbologies": ["Code 128", "QR", "Data Matrix", "PDF417", "Aztec"],
+  "supports_qr": true,
+  "supports_datamatrix": true,
+  "minimum_print_contrast_percent": null,
+  "notes": ["Perfil para futura expansión; verificar compatibilidad real antes de estandarizar un código 2D operativo."]
+}

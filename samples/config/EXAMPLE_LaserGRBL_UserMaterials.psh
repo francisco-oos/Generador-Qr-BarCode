@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- DEMO ONLY. Use Export/actual UserMaterials.psh from workshop for real presets. -->
+<MaterialDB>
+  <Materials>
+    <Model>SCULPFUN S9 Pro 10W</Model>
+    <Material>DEMO - phone safe coupon</Material>
+    <Thickness>1.0</Thickness>
+    <Action>Engrave</Action>
+    <Power>25</Power>
+    <Speed>3000</Speed>
+    <Cycles>1</Cycles>
+    <Remarks>DEMO ONLY - not a production phone preset</Remarks>
+  </Materials>
+</MaterialDB>

@@ -1,0 +1,56 @@
+{
+  "id": "phone_qr_economic_v1",
+  "name": "Teléfono — QR + número económico",
+  "version": "1.1",
+  "category": "phone",
+  "description": "Identidad patrimonial estable; el QR no contiene responsable, grupo ni proyecto mutable.",
+  "width_mm": 24.0,
+  "height_mm": 30.0,
+  "quality_profile": "compact_asset_v1",
+  "calibration_required": true,
+  "expected_fields": [
+    "economic_number"
+  ],
+  "elements": [
+    {
+      "kind": "qr",
+      "x_mm": 4.5,
+      "y_mm": 1.0,
+      "source": "asset_id|economic_number",
+      "module_mm": 0.5,
+      "error_correction": "M",
+      "label": "QR de identidad"
+    },
+    {
+      "kind": "text",
+      "x_mm": 1.0,
+      "y_mm": 28.0,
+      "source": "economic_number|asset_id",
+      "width_mm": 22.0,
+      "font_size_mm": 3.7,
+      "align": "center",
+      "label": "Número económico"
+    }
+  ],
+  "metadata": {
+    "payload_policy": "Preferir asset_id estable; la URL de Server Oficina puede resolverse posteriormente sin regrabar el activo.",
+    "material_warning": "No grabar directamente teléfonos sin validar material/modelo y posición segura; usar placa anodizada cuando corresponda.",
+    "example_data": {
+      "asset_id": "PHONE-000037",
+      "economic_number": "TEL-0037"
+    }
+  },
+  "input_rules": [
+    {
+      "field": "economic_number",
+      "manual_prefix_enabled": false,
+      "manual_prefix": "TEL-",
+      "manual_suffix_enabled": false,
+      "manual_suffix": "",
+      "imported_values": "as_is",
+      "uppercase": true,
+      "trim": true,
+      "description": "El prefijo TEL- puede activarse desde el asistente si la empresa decide normalizar la captura manual."
+    }
+  ]
+}

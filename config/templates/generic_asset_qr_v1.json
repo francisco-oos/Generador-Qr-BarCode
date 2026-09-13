@@ -1,0 +1,40 @@
+{
+  "id": "generic_asset_qr_v1",
+  "name": "Activo genérico — QR + ID",
+  "version": "1.0",
+  "category": "generic",
+  "description": "Plantilla base clonable para radios, laptops, cargadores, baterías y futuros activos.",
+  "width_mm": 28.0,
+  "height_mm": 32.0,
+  "quality_profile": "compact_asset_v1",
+  "calibration_required": true,
+  "expected_fields": [
+    "asset_id"
+  ],
+  "elements": [
+    {
+      "kind": "qr",
+      "x_mm": 6.0,
+      "y_mm": 1.0,
+      "source": "asset_id",
+      "module_mm": 0.5,
+      "error_correction": "M"
+    },
+    {
+      "kind": "text",
+      "x_mm": 1.0,
+      "y_mm": 29.5,
+      "source": "asset_id",
+      "width_mm": 26.0,
+      "font_size_mm": 3.5,
+      "align": "center"
+    }
+  ],
+  "metadata": {
+    "purpose": "Punto de partida; copiar y ajustar medidas sin cambiar código.",
+    "example_data": {
+      "asset_id": "RADIO-000184"
+    }
+  },
+  "input_rules": []
+}

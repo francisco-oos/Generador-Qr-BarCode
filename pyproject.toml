@@ -1,0 +1,23 @@
+[project]
+name = "server-oficina-marking-studio"
+version = "0.5.0"
+description = "Generador local de marcados QR/barcode/serie para Server Oficina"
+requires-python = ">=3.12"
+license = {text = "Proprietary - internal evaluation"}
+dependencies = [
+  "fastapi==0.128.2",
+  "uvicorn==0.48.0",
+  "pydantic==2.13.4",
+  "reportlab==4.4.9",
+  "qrcode==8.2",
+  "Pillow==12.3.0",
+  "svglib==1.6.0",
+  "cryptography==46.0.4",
+  "python-multipart==0.0.29",
+  "pyserial==3.5"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

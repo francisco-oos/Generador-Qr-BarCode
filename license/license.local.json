@@ -1,0 +1,25 @@
+{
+  "payload": {
+    "license_id": "SO-MARKING-INTERNAL-001",
+    "organization": "Server Oficina - evaluación interna",
+    "edition": "Internal Standalone",
+    "issued_at": "2026-09-12T05:25:10Z",
+    "expires_at": "2035-12-31T23:59:59Z",
+    "features": [
+      "generator",
+      "csv_batch",
+      "template_editor",
+      "jig_editor",
+      "history",
+      "scan_verification",
+      "future_server_connector"
+    ],
+    "machine_limit": 3,
+    "server_oficina_ready": true,
+    "metadata": {
+      "purpose": "Licencia firmada para evaluación/uso interno de la versión standalone.",
+      "note": "La clave privada de firma no se distribuye. La integración futura podrá sustituir este proveedor por Server Oficina."
+    }
+  },
+  "signature": "yY+RZ6KVbKRZP4Z8MGFsm3rLDGjVv6oeeNJF/HsVfpczEQTiB91WSBwfEfJNSrVtJyAMwVXGvqQ+4lUCTYepBg=="
+}

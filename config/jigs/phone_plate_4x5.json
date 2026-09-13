@@ -1,0 +1,24 @@
+{
+  "id": "phone_plate_4x5",
+  "name": "Placas de teléfono 4x5",
+  "machine_profile_id": "sculpfun_s9_pro_10w",
+  "target_category": "phone",
+  "template_id": "phone_qr_economic_v1",
+  "grid": {
+    "rows": 5,
+    "cols": 4,
+    "origin_x_mm": 15.0,
+    "origin_y_mm": 15.0,
+    "pitch_x_mm": 70.0,
+    "pitch_y_mm": 70.0,
+    "mark_offset_x_mm": 20.0,
+    "mark_offset_y_mm": 20.0,
+    "slot_width_mm": 60.0,
+    "slot_height_mm": 60.0
+  },
+  "calibration_required": true,
+  "disabled_slots": [],
+  "metadata": {
+    "purpose": "Producción en lote sobre placas o cupones de prueba; no implica que la placa final deba medir 60x60 mm."
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "zebra_symbol_ls2208",
+  "name": "Symbol / Zebra LS2208",
+  "technology": "1D laser",
+  "interfaces": ["USB", "RS-232", "Keyboard Wedge"],
+  "symbologies": ["Code 128", "Code 39", "Code 93", "Codabar", "Code 11", "MSI Plessey", "UPC/EAN", "Interleaved 2 of 5", "GS1 DataBar"],
+  "supports_qr": false,
+  "supports_datamatrix": false,
+  "minimum_print_contrast_percent": 20,
+  "notes": [
+    "El lector visible en la foto aportada muestra la etiqueta LS2208-SR20007R-NA / Symbol Technologies.",
+    "Code 128 es la opción de compatibilidad principal para los nodos mientras se use este lector.",
+    "Un QR o Data Matrix requiere un lector 2D adicional."
+  ]
+}

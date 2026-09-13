@@ -1,0 +1,59 @@
+{
+  "id": "inova_quantum_code128_v1",
+  "name": "INOVA Quantum — Code 128 + ID visual",
+  "version": "1.1",
+  "category": "node_inova",
+  "description": "Recuperación de identificación operativa de nodo INOVA; replica el patrón útil de barcode + texto legible.",
+  "width_mm": 52.0,
+  "height_mm": 18.0,
+  "quality_profile": "rugged_field_v1",
+  "calibration_required": true,
+  "expected_fields": [
+    "manufacturer_id"
+  ],
+  "elements": [
+    {
+      "kind": "code128",
+      "x_mm": 1.0,
+      "y_mm": 0.5,
+      "source": "manufacturer_id|operational_id|asset_id",
+      "width_mm": 50.0,
+      "height_mm": 10.5,
+      "align": "center",
+      "label": "Código operativo"
+    },
+    {
+      "kind": "text",
+      "x_mm": 1.0,
+      "y_mm": 16.2,
+      "source": "manufacturer_id|operational_id|asset_id",
+      "width_mm": 50.0,
+      "font_size_mm": 4.0,
+      "align": "center",
+      "label": "ID visual"
+    }
+  ],
+  "metadata": {
+    "initial_basis": "Fotos operativas aportadas: actualmente se graba Q00xxxxxx y antes se escribía el tramo numérico con marcador.",
+    "suffix_policy": "No añadir -xx si no está confirmado; conservar manufacturer_full_id por separado cuando exista.",
+    "physical_status": "Medida inicial para prueba; aprobar solo después de lectura con el scanner real y prueba sobre carcasa de descarte.",
+    "example_data": {
+      "manufacturer_id": "Q00525499",
+      "operational_id": "Q00525499",
+      "asset_id": "NODE-00525499"
+    }
+  },
+  "input_rules": [
+    {
+      "field": "manufacturer_id",
+      "manual_prefix_enabled": true,
+      "manual_prefix": "Q00",
+      "manual_suffix_enabled": false,
+      "manual_suffix": "",
+      "imported_values": "as_is",
+      "uppercase": true,
+      "trim": true,
+      "description": "Captura manual admite solo el tramo numérico; CSV se respeta tal como fue entregado para evitar prefijo duplicado."
+    }
+  ]
+}

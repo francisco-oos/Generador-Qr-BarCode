@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- DEMO ONLY. Replace with a Material Library exported from the actual workshop LightBurn. -->
+<MaterialLibrary>
+  <Material name="DEMO - INOVA housing">
+    <Entry Thickness="2.0" Desc="DEMO only - existing visible engraving placeholder">
+      <CutSetting type="Scan">
+        <name Value="DEMO visible marking"/>
+        <speed Value="3200"/>
+        <minPower Value="18"/>
+        <maxPower Value="32"/>
+        <interval Value="0.08"/>
+        <numPasses Value="1"/>
+      </CutSetting>
+    </Entry>
+  </Material>
+</MaterialLibrary>

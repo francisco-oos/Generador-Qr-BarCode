@@ -1,0 +1,41 @@
+{
+  "id": "sculpfun_s9_pro_10w",
+  "name": "SCULPFUN S9 Pro 10W",
+  "controller": "GRBL",
+  "connection": "USB serial",
+  "bed_width_mm": 400.0,
+  "bed_height_mm": 410.0,
+  "laser_wavelength_nm": 450,
+  "optical_power_w": 10.0,
+  "vector_formats": [
+    "SVG",
+    "DXF",
+    "G-code/NC via controller software"
+  ],
+  "raster_formats": [
+    "PNG",
+    "BMP",
+    "JPG"
+  ],
+  "recommended_software": [
+    "Sculpfun Space",
+    "LightBurn Core",
+    "LaserGRBL (Windows)"
+  ],
+  "direct_machine_output_enabled": false,
+  "metadata": {
+    "source": "SCULPFUN product/support documentation",
+    "focus_type": "fixed focus + sliding mechanism",
+    "nominal_focus_spot_mm": 0.06,
+    "engraving_accuracy_mm": 0.01,
+    "handoff_strategy": "Marking Studio genera SVG/PNG; Sculpfun Space/LightBurn/LaserGRBL conservan control de GRBL, velocidad, potencia, origen, Frame y seguridad.",
+    "safety": "No se incluyen parámetros universales de potencia/velocidad: deben calibrarse por material y carcasa.",
+    "positioning_default": "Fixed physical jig + Current Position or User Origin + Frame before every production batch.",
+    "absolute_coordinates_caution": "Do not rely on repeatable Absolute Coordinates after restart unless homing/limit switches are installed, enabled and physically validated.",
+    "homing_assumption": "Treat limit switches/homing as not guaranteed on the base S9 Pro installation; detect actual controller state before relying on homing.",
+    "sculpfun_space_support": "Official Sculpfun Space supports non-galvo SCULPFUN machines and imports SVG; suitable handoff alternative on Windows/macOS.",
+    "existing_shop_settings_priority": "Settings already proven by the engraving area on this exact machine/material/surface are the baseline; Marking Studio can import/capture them read-only.",
+    "focus_reference_mm": 50.0,
+    "focus_reference_source": "SCULPFUN S9 Pro manual: focus is 50 mm below the lower edge of the aluminum laser-module shell; supplied 50 mm measuring column."
+  }
+}

@@ -1,0 +1,723 @@
+{
+  "version": "1.1",
+  "generated_for": "SCULPFUN S9 Pro / 10 W blue diode class",
+  "wavelength_context_nm": "~450-455",
+  "policy": {
+    "priority_order": [
+      "shop_validated_same_machine_same_material",
+      "manufacturer_specific_recommendation",
+      "researched_starting_range",
+      "material_test_from_conservative_start"
+    ],
+    "production_rule": "A researched range is never an approved production preset. A shop-validated setting imported from the actual workstation takes precedence when machine, material, coating and operation match.",
+    "unknown_material_rule": "Do not laser unknown plastics or mixed assemblies until composition and fumes are understood. Use a separate laser-safe asset tag when direct marking is uncertain.",
+    "phone_rule": "Brand alone is not enough. Exact model and exact marking surface must be identified; assembled phones may contain glass, PC, PMMA, rubber, fiberglass/resin, paint, coatings and a non-removable battery close to the work surface.",
+    "direct_phone_rule": "Nunca transferir un ajuste entre modelos o superficies por marca. Si el área ya grabó exactamente ese modelo/superficie con resultado legible y sin daño, capturar/importar ese ajuste como baseline local y someterlo a verificación de código y muestra física."
+  },
+  "materials": [
+    {
+      "id": "plywood_engrave_s9",
+      "name": "Madera contrachapada / plywood",
+      "category": "wood",
+      "operation": "engrave",
+      "compatibility": "supported",
+      "status": "researched_starting_range",
+      "suggested": {
+        "speed_mm_min": [
+          1000,
+          2000
+        ],
+        "power_percent": [
+          20,
+          60
+        ],
+        "passes": [
+          1,
+          1
+        ],
+        "air_assist": "optional; may make engraving lighter"
+      },
+      "notes": [
+        "Natural material varies by sheet and glue layer.",
+        "Use LightBurn Material Test before approving a shop preset."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        }
+      ]
+    },
+    {
+      "id": "mdf_3mm_s9",
+      "name": "MDF 3 mm",
+      "category": "wood",
+      "operation": "cut_reference_only",
+      "compatibility": "supported_with_testing",
+      "status": "community_examples_republished_by_sculpfun",
+      "suggested": {
+        "examples_speed_power_passes": [
+          [
+            800,
+            90,
+            7
+          ],
+          [
+            300,
+            90,
+            3
+          ],
+          [
+            200,
+            80,
+            2
+          ]
+        ]
+      },
+      "notes": [
+        "These are cutting examples, not phone/node engraving presets.",
+        "MDF can vary substantially and produces smoke; extraction is required."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        }
+      ]
+    },
+    {
+      "id": "cardboard_paper_engrave",
+      "name": "Cartón / papel",
+      "category": "paper",
+      "operation": "engrave",
+      "compatibility": "supported_but_flammable",
+      "status": "material_test_required",
+      "suggested": {
+        "conservative_start_speed_mm_min": 1000,
+        "conservative_start_power_percent": 10,
+        "passes": [
+          1,
+          1
+        ]
+      },
+      "notes": [
+        "Highly flammable. Never run unattended.",
+        "This conservative start follows SCULPFUN guidance when no material-specific value is known."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        },
+        {
+          "title": "LightBurn First Material Test",
+          "url": "https://docs.lightburnsoftware.com/latest/GetStarted/FirstMaterialTest/"
+        }
+      ]
+    },
+    {
+      "id": "leather_genuine_engrave_s9",
+      "name": "Cuero genuino (composición verificada)",
+      "category": "leather",
+      "operation": "engrave",
+      "compatibility": "supported",
+      "status": "researched_starting_range",
+      "suggested": {
+        "speed_mm_min": [
+          1000,
+          2000
+        ],
+        "power_percent": [
+          20,
+          60
+        ],
+        "passes": [
+          1,
+          1
+        ]
+      },
+      "notes": [
+        "Strong odor; use extraction.",
+        "Do not treat artificial leather/vinyl as genuine leather: PVC-containing products are unsafe."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        },
+        {
+          "title": "Epilog unsafe materials",
+          "url": "https://www.epiloglaser.com/es-mx/como-funciona/preguntas-frecuentes/materiales-peligrosos-para-maquinas-laser/"
+        }
+      ]
+    },
+    {
+      "id": "glass_coated_engrave_s9",
+      "name": "Vidrio con recubrimiento opaco de sacrificio",
+      "category": "glass",
+      "operation": "engrave",
+      "compatibility": "indirect_method",
+      "status": "researched_starting_range",
+      "suggested": {
+        "speed_mm_min": [
+          1000,
+          2000
+        ],
+        "power_percent": [
+          60,
+          80
+        ],
+        "passes": [
+          1,
+          1
+        ]
+      },
+      "notes": [
+        "Blue diode light passes through clear glass; a coating method is used.",
+        "Not a recommendation to engrave an assembled phone glass back."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        }
+      ]
+    },
+    {
+      "id": "mirror_back_engrave_s9",
+      "name": "Espejo — grabar por reverso",
+      "category": "glass",
+      "operation": "engrave",
+      "compatibility": "supported_by_backside_method",
+      "status": "researched_starting_range",
+      "suggested": {
+        "speed_mm_min": [
+          1000,
+          2000
+        ],
+        "power_percent": [
+          30,
+          80
+        ],
+        "passes": [
+          1,
+          1
+        ]
+      },
+      "notes": [
+        "SCULPFUN advises engraving the backside, not the mirror face."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        }
+      ]
+    },
+    {
+      "id": "stainless_mark_treated_s9",
+      "name": "Acero inoxidable — marcado con tratamiento superficial",
+      "category": "metal",
+      "operation": "mark",
+      "compatibility": "supported_with_surface_treatment",
+      "status": "researched_starting_range",
+      "suggested": {
+        "speed_mm_min": [
+          800,
+          1500
+        ],
+        "power_percent": [
+          20,
+          70
+        ],
+        "passes": [
+          1,
+          1
+        ]
+      },
+      "notes": [
+        "This is surface marking, not cutting/engraving bulk metal with a blue diode.",
+        "For asset tags, anodized/coated aluminum is often easier to mark, but use a material test because the SCULPFUN guide does not publish one universal range for every coating."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        }
+      ]
+    },
+    {
+      "id": "ceramic_tile_mark_s9",
+      "name": "Cerámica / azulejo con método de recubrimiento",
+      "category": "ceramic",
+      "operation": "mark",
+      "compatibility": "supported_with_method",
+      "status": "wide_researched_range_test_required",
+      "suggested": {
+        "speed_mm_min": [
+          1000,
+          2000
+        ],
+        "power_percent": [
+          0,
+          85
+        ],
+        "passes": [
+          1,
+          1
+        ]
+      },
+      "notes": [
+        "Published range is intentionally broad because the result depends on tile and coating chemistry."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        }
+      ]
+    },
+    {
+      "id": "opaque_dark_acrylic",
+      "name": "Acrílico opaco oscuro",
+      "category": "plastic",
+      "operation": "engrave_or_cut",
+      "compatibility": "supported_with_testing",
+      "status": "material_test_required",
+      "suggested": {
+        "cut_reference_speed_mm_min": [
+          100,
+          300
+        ],
+        "cut_reference_power_percent": [
+          85,
+          85
+        ],
+        "cut_reference_passes": [
+          4,
+          8
+        ],
+        "conservative_engrave_start_speed_mm_min": 1000,
+        "conservative_engrave_start_power_percent": 10
+      },
+      "notes": [
+        "SCULPFUN notes transparent acrylic cannot be directly processed by a blue diode in the same way as opaque material.",
+        "Confirm the polymer is acrylic/PMMA and not PVC/vinyl."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        }
+      ]
+    },
+    {
+      "id": "anodized_aluminum_asset_tag",
+      "name": "Etiqueta de aluminio anodizado/recubierto",
+      "category": "metal_tag",
+      "operation": "mark",
+      "compatibility": "supported_surface_marking",
+      "status": "material_test_required",
+      "suggested": {
+        "conservative_start_speed_mm_min": 1000,
+        "conservative_start_power_percent": 10,
+        "recommended_test": {
+          "speed_mm_min": [
+            1000,
+            3000
+          ],
+          "power_percent": [
+            10,
+            60
+          ]
+        }
+      },
+      "notes": [
+        "Preferred fallback for phones/materials whose direct body composition is uncertain.",
+        "Use LightBurn Material Test and then save the approved shop result into the Material Library."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN diode material compatibility",
+          "url": "https://mx.sculpfun.com/collections/best-seller/10w"
+        },
+        {
+          "title": "LightBurn Material Test",
+          "url": "https://docs.lightburnsoftware.com/latest/Reference/MaterialTest/"
+        }
+      ]
+    },
+    {
+      "id": "unknown_plastic",
+      "name": "Plástico desconocido / mezcla sin ficha técnica",
+      "category": "plastic",
+      "operation": "any",
+      "compatibility": "unknown",
+      "status": "blocked_until_identified",
+      "suggested": {},
+      "notes": [
+        "Do not generate a production power/speed preset from appearance alone.",
+        "Some polymers release toxic/corrosive gases or melt/ignite. Determine composition or use a separate laser-safe tag."
+      ],
+      "sources": [
+        {
+          "title": "xTool laser chemical safety",
+          "url": "https://support.xtool.com/article/354"
+        },
+        {
+          "title": "Epilog material safety",
+          "url": "https://support.epiloglaser.com/staging/es/maquina-laser/legado/uso-y-funcionamiento/preguntas-frecuentes/seguridad-de-los-materiales-y-su-laser/"
+        }
+      ]
+    },
+    {
+      "id": "pvc_vinyl",
+      "name": "PVC / vinilo / materiales clorados",
+      "category": "plastic",
+      "operation": "any",
+      "compatibility": "unsafe",
+      "status": "do_not_laser",
+      "suggested": {},
+      "notes": [
+        "Do not laser. Chlorinated fumes are hazardous and corrosive."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        },
+        {
+          "title": "Epilog unsafe materials",
+          "url": "https://www.epiloglaser.com/es-mx/como-funciona/preguntas-frecuentes/materiales-peligrosos-para-maquinas-laser/"
+        }
+      ]
+    },
+    {
+      "id": "abs_plastic",
+      "name": "ABS",
+      "category": "plastic",
+      "operation": "any",
+      "compatibility": "high_caution",
+      "status": "avoid_direct_processing",
+      "suggested": {},
+      "notes": [
+        "Can melt, ignite and produce hazardous fumes; no generic production preset is provided."
+      ],
+      "sources": [
+        {
+          "title": "xTool D1 safety guide",
+          "url": "https://support.xtool.com/article/354"
+        }
+      ]
+    },
+    {
+      "id": "polycarbonate_pc",
+      "name": "Policarbonato (PC)",
+      "category": "plastic",
+      "operation": "any",
+      "compatibility": "high_caution",
+      "status": "no_generic_diode_preset",
+      "suggested": {},
+      "notes": [
+        "Polycarbonate can discolor, melt/ignite and may release harmful smoke; do not treat a PC phone back as generic laser-safe plastic."
+      ],
+      "sources": [
+        {
+          "title": "xTool D1 safety guide",
+          "url": "https://support.xtool.com/article/354"
+        },
+        {
+          "title": "Epilog polycarbonate FAQ",
+          "url": "https://www.epiloglaser.com/es-mx/como-funciona/preguntas-frecuentes/-se-puede-cortar-y-grabar-policarbonato-con-una-maquina-laser-/"
+        }
+      ]
+    },
+    {
+      "id": "phone_assembled_unknown",
+      "name": "Teléfono ensamblado — superficie no confirmada",
+      "category": "phone",
+      "operation": "mark",
+      "compatibility": "conditional",
+      "status": "shop_validated_only",
+      "suggested": {},
+      "notes": [
+        "No universal phone preset. Prefer the workshop's proven setting for the exact model/surface, imported from LightBurn, or use an anodized asset tag.",
+        "Battery and internal components remain in the assembled device; do not extrapolate settings between models."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        },
+        {
+          "title": "LightBurn First Material Test",
+          "url": "https://docs.lightburnsoftware.com/latest/GetStarted/FirstMaterialTest/"
+        }
+      ]
+    },
+    {
+      "id": "wood_generic_engrave_s9",
+      "name": "Madera natural / madera sólida",
+      "category": "wood",
+      "operation": "engrave",
+      "compatibility": "supported_with_testing",
+      "status": "conservative_test_start",
+      "suggested": {
+        "conservative_start_speed_mm_min": 1000,
+        "conservative_start_power_percent": 10,
+        "recommended_test": {
+          "speed_mm_min": [
+            1000,
+            2500
+          ],
+          "power_percent": [
+            10,
+            60
+          ]
+        }
+      },
+      "notes": [
+        "SCULPFUN stresses that even pieces from the same wood batch can react differently.",
+        "This range is a test-grid envelope, not a production preset."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        },
+        {
+          "title": "LightBurn Material Test",
+          "url": "https://docs.lightburnsoftware.com/latest/Reference/MaterialTest/"
+        }
+      ]
+    },
+    {
+      "id": "rubber_unknown",
+      "name": "Caucho / goma de formulación no confirmada",
+      "category": "plastic",
+      "operation": "mark",
+      "compatibility": "unknown",
+      "status": "blocked_until_identified",
+      "suggested": {},
+      "notes": [
+        "Rubber is a family of formulations, not one laser material. Some compounds/additives can create harmful fumes.",
+        "Relevant to rugged phones: identify the exact surface or use the shop-proven exact-model setting / laser-safe tag."
+      ],
+      "sources": [
+        {
+          "title": "xTool laser safety — unknown materials",
+          "url": "https://support.xtool.com/article/354"
+        },
+        {
+          "title": "Epilog material safety / SDS guidance",
+          "url": "https://www.epiloglaser.com/es-mx/como-funciona/preguntas-frecuentes/materiales-peligrosos-para-maquinas-laser/"
+        }
+      ]
+    },
+    {
+      "id": "fiberglass_composite_unknown_resin",
+      "name": "Fibra de vidrio / composite con resina no identificada",
+      "category": "plastic",
+      "operation": "mark",
+      "compatibility": "unknown",
+      "status": "blocked_until_resin_identified",
+      "suggested": {},
+      "notes": [
+        "The glass fibers alone do not identify the binder/resin or coatings. Do not derive a preset only from the word “fiberglass”.",
+        "For UMIDIGI BISON X10 use exact-surface shop validation or a separate asset tag."
+      ],
+      "sources": [
+        {
+          "title": "UMIDIGI BISON X10 official overview",
+          "url": "https://www.umidigi.com/page-umidigi_bisonx10_overview.html"
+        },
+        {
+          "title": "xTool laser safety — unknown materials",
+          "url": "https://support.xtool.com/article/354"
+        }
+      ]
+    },
+    {
+      "id": "painted_coated_metal_tag",
+      "name": "Metal pintado/recubierto o placa de activo láser-safe",
+      "category": "metal_tag",
+      "operation": "mark",
+      "compatibility": "supported_if_coating_known",
+      "status": "material_test_required",
+      "suggested": {
+        "conservative_start_speed_mm_min": 1000,
+        "conservative_start_power_percent": 10,
+        "recommended_test": {
+          "speed_mm_min": [
+            1000,
+            3000
+          ],
+          "power_percent": [
+            10,
+            60
+          ]
+        }
+      },
+      "notes": [
+        "The laser normally removes/discolors the coating; chemistry of the coating must be known/safe.",
+        "Recommended fallback for phones when direct body marking is uncertain."
+      ],
+      "sources": [
+        {
+          "title": "SCULPFUN Settings guide",
+          "url": "https://www.sculpfun.com/blogs/blog/settings-guide"
+        },
+        {
+          "title": "LightBurn Material Test",
+          "url": "https://docs.lightburnsoftware.com/latest/Reference/MaterialTest/"
+        }
+      ]
+    }
+  ],
+  "phone_models": [
+    {
+      "id": "cubot_kingkong_9",
+      "brand": "CUBOT",
+      "model": "KingKong 9",
+      "battery": "10600 mAh non-removable",
+      "surface_evidence": [
+        "CUBOT official specification confirms a 10600 mAh non-removable battery but does not publish a precise material stack for the rear shell."
+      ],
+      "direct_laser_policy": "shop_validated_exact_surface_only",
+      "recommended_reference_id": "phone_assembled_unknown",
+      "notes": [
+        "Do not infer the phone body's material from aftermarket case descriptions.",
+        "If the workshop already marks this exact model successfully, import that LightBurn preset and keep it as the authoritative local baseline."
+      ],
+      "sources": [
+        {
+          "title": "CUBOT KingKong 9 official specs",
+          "url": "https://cubot.net/phones/rugged-phone/kingkong9-specs/94?l=en"
+        }
+      ],
+      "aliases": [
+        "King Kong 9",
+        "KingKong9"
+      ]
+    },
+    {
+      "id": "umidigi_bison_x10",
+      "brand": "UMIDIGI",
+      "model": "BISON X10",
+      "battery": "assembled rugged phone",
+      "surface_evidence": [
+        "UMIDIGI describes the rear as AG matte fiberglass plus rubber cushion."
+      ],
+      "direct_laser_policy": "shop_validated_exact_surface_only",
+      "recommended_reference_id": "phone_assembled_unknown",
+      "notes": [
+        "Fiberglass is a composite; the resin/binder chemistry matters. Do not assign a generic plastic preset."
+      ],
+      "sources": [
+        {
+          "title": "UMIDIGI BISON X10 official overview",
+          "url": "https://www.umidigi.com/page-umidigi_bisonx10_overview.html"
+        }
+      ],
+      "aliases": [
+        "Bison X",
+        "BISON X10",
+        "BISON X10 series"
+      ]
+    },
+    {
+      "id": "umidigi_bison_x10_pro",
+      "brand": "UMIDIGI",
+      "model": "BISON X10 Pro",
+      "battery": "assembled rugged phone",
+      "surface_evidence": [
+        "UMIDIGI describes the X10 Pro rear as industrial rubber; the series also uses rubber cushions and metal frame."
+      ],
+      "direct_laser_policy": "shop_validated_exact_surface_only",
+      "recommended_reference_id": "phone_assembled_unknown",
+      "notes": [
+        "Rubber formulations vary. Use only a setting proven by the workshop for the exact rear surface."
+      ],
+      "sources": [
+        {
+          "title": "UMIDIGI BISON X10 series launch",
+          "url": "https://community.umidigi.com/forum.php?mod=viewthread&tid=20787"
+        }
+      ],
+      "aliases": [
+        "Bison X Pro",
+        "BISON X10 PRO"
+      ]
+    },
+    {
+      "id": "xiaomi_generic",
+      "brand": "Xiaomi / Redmi",
+      "model": "Modelo exacto requerido",
+      "battery": "typically non-removable",
+      "surface_evidence": [
+        "Xiaomi rear materials vary by model: examples include PC+PMMA, composite panels and glass backs."
+      ],
+      "direct_laser_policy": "require_exact_model_then_shop_validation",
+      "recommended_reference_id": "phone_assembled_unknown",
+      "notes": [
+        "Never choose a laser preset from the brand name alone."
+      ],
+      "sources": [
+        {
+          "title": "REDMI Note 14 material FAQ",
+          "url": "https://www.mi.com/ph/support/faq/details/KA-530059/"
+        },
+        {
+          "title": "REDMI Note 13 Pro+ 5G material FAQ",
+          "url": "https://www.mi.com/global/support/faq/details/KA-242965/"
+        }
+      ],
+      "aliases": [
+        "Xiaomi",
+        "Redmi",
+        "POCO"
+      ]
+    },
+    {
+      "id": "redmi_note_14",
+      "brand": "REDMI",
+      "model": "Note 14",
+      "battery": "non-removable rear assembly",
+      "surface_evidence": [
+        "Xiaomi states the back shell is PC + PMMA."
+      ],
+      "direct_laser_policy": "do_not_apply_generic_plastic_preset",
+      "recommended_reference_id": "phone_assembled_unknown",
+      "notes": [
+        "PC is a high-caution polymer for laser processing; a separate anodized asset tag is the safe default unless the exact workshop process has been validated."
+      ],
+      "sources": [
+        {
+          "title": "REDMI Note 14 material FAQ",
+          "url": "https://www.mi.com/ph/support/faq/details/KA-530059/"
+        }
+      ]
+    },
+    {
+      "id": "redmi_note_13_pro_plus_5g",
+      "brand": "REDMI",
+      "model": "Note 13 Pro+ 5G",
+      "battery": "assembled phone",
+      "surface_evidence": [
+        "Xiaomi states the back shell is glass."
+      ],
+      "direct_laser_policy": "shop_validated_exact_surface_only",
+      "recommended_reference_id": "phone_assembled_unknown",
+      "notes": [
+        "A clear/colored glass phone back is not equivalent to a loose coated glass test coupon; do not transfer generic glass settings blindly."
+      ],
+      "sources": [
+        {
+          "title": "REDMI Note 13 Pro+ 5G material FAQ",
+          "url": "https://www.mi.com/global/support/faq/details/KA-242965/"
+        }
+      ]
+    }
+  ],
+  "research_date": "2026-09-12"
+}
