@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CATALOG_PATH = ROOT / "config" / "materials" / "material_reference_v1.json"
 
 
+# WHY: Carga una única fuente versionada de referencias para evitar duplicar recomendaciones en frontend y backend.
 def load_material_reference() -> dict[str, Any]:
     data = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
     if not isinstance(data.get("materials"), list) or not isinstance(data.get("phone_models"), list):
@@ -25,6 +26,7 @@ def load_material_reference() -> dict[str, Any]:
     return data
 
 
+# WHY: Filtra la referencia por texto/categoría manteniendo siempre las advertencias de seguridad asociadas.
 def search_material_reference(query: str = "", category: str | None = None) -> dict[str, Any]:
     data = load_material_reference()
     q = query.strip().lower()
@@ -47,6 +49,7 @@ def search_material_reference(query: str = "", category: str | None = None) -> d
     }
 
 
+# WHY: Busca marca/modelo y devuelve superficies conocidas sin convertir el nombre comercial en una suposición de material.
 def phone_reference(brand: str, model: str = "") -> list[dict[str, Any]]:
     data = load_material_reference()
     b = brand.strip().lower()

@@ -16,10 +16,12 @@ ROOT = Path(__file__).resolve().parent.parent
 CONFIG = ROOT / "config"
 
 
+# WHY: Lee JSON UTF-8 de forma centralizada para mantener una ruta de carga consistente y testeable.
 def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+# WHY: Descubre plantillas desde disco para que nuevas configuraciones aparezcan sin modificar Python.
 @lru_cache(maxsize=1)
 def load_templates() -> dict[str, TemplateSpec]:
     items: dict[str, TemplateSpec] = {}
@@ -29,6 +31,7 @@ def load_templates() -> dict[str, TemplateSpec]:
     return items
 
 
+# WHY: Carga perfiles de máquina declarativos y separados del código de producción.
 @lru_cache(maxsize=1)
 def load_machines() -> dict[str, MachineProfile]:
     items: dict[str, MachineProfile] = {}
@@ -38,6 +41,7 @@ def load_machines() -> dict[str, MachineProfile]:
     return items
 
 
+# WHY: Carga capacidades de lectores para comprobaciones y documentación operativa.
 @lru_cache(maxsize=1)
 def load_scanners() -> dict[str, ScannerProfile]:
     items: dict[str, ScannerProfile] = {}
@@ -47,6 +51,7 @@ def load_scanners() -> dict[str, ScannerProfile]:
     return items
 
 
+# WHY: Carga bases físicas configurables y sus slots/calibración.
 @lru_cache(maxsize=1)
 def load_jigs() -> dict[str, JigProfile]:
     items: dict[str, JigProfile] = {}
@@ -56,6 +61,7 @@ def load_jigs() -> dict[str, JigProfile]:
     return items
 
 
+# WHY: Carga criterios de legibilidad reutilizables por plantillas.
 @lru_cache(maxsize=1)
 def load_quality_profiles() -> dict[str, QualityProfile]:
     items: dict[str, QualityProfile] = {}
@@ -65,6 +71,7 @@ def load_quality_profiles() -> dict[str, QualityProfile]:
     return items
 
 
+# WHY: Persiste una plantilla validada de forma atómica y legible para revisión humana.
 def save_template(template: TemplateSpec) -> Path:
     path = CONFIG / "templates" / f"{template.id}.json"
     path.write_text(json.dumps(template.model_dump(), indent=2, ensure_ascii=False), encoding="utf-8")
@@ -72,6 +79,7 @@ def save_template(template: TemplateSpec) -> Path:
     return path
 
 
+# WHY: Persiste un jig validado fuera del código para permitir calibración/reemplazo en campo.
 def save_jig(jig: JigProfile) -> Path:
     path = CONFIG / "jigs" / f"{jig.id}.json"
     path.write_text(json.dumps(jig.model_dump(), indent=2, ensure_ascii=False), encoding="utf-8")

@@ -17,10 +17,12 @@ from .models import BatchAssignment, JigProfile, MachineProfile, QualityProfile,
 from .template_engine import apply_input_rules, render_template
 
 
+# WHY: Normaliza sólo cuando la política lo solicita; evita que comparaciones físicas fallen por formato incidental.
 def normalize_identifier(value: str) -> str:
     return re.sub(r"\s+", "", (value or "").strip()).upper()
 
 
+# WHY: Convierte CSV/listas flexibles en filas uniformes y detecta encabezados sin imponer un esquema de empresa.
 def parse_csv_text(text: str, has_header: bool | None = None) -> tuple[list[str], list[dict[str, str]]]:
     """Parse spreadsheet-style CSV or a plain one-column identifier list.
 
@@ -68,6 +70,7 @@ def parse_csv_text(text: str, has_header: bool | None = None) -> tuple[list[str]
     return headers, rows
 
 
+# WHY: Calcula coordenadas de slots desde el jig para que la colocación en cama sea reproducible y auditable.
 def slot_positions(jig: JigProfile) -> list[dict[str, float | int]]:
     g = jig.grid
     disabled = set(jig.disabled_slots)
@@ -91,17 +94,20 @@ def slot_positions(jig: JigProfile) -> list[dict[str, float | int]]:
     return slots
 
 
+# WHY: Calcula cuántas cargas físicas requiere un dataset sin confundir cantidad de registros con capacidad de jig.
 def chunk_count(total_records: int, capacity: int) -> int:
     if capacity <= 0:
         raise ValueError("jig capacity must be > 0")
     return math.ceil(total_records / capacity)
 
 
+# WHY: Separa contenido interno de una marca individual para insertarla en el SVG del lote.
 def _extract_svg(svg: str) -> str:
     idx = svg.find("<svg")
     return svg[idx:] if idx >= 0 else svg
 
 
+# WHY: Anida una marca en su slot conservando unidades y traslación física.
 def _nest_mark(svg: str, x_mm: float, y_mm: float, width_mm: float, height_mm: float) -> str:
     root = _extract_svg(svg)
     # Template viewBox uses millimetres as user units. Strip its outer SVG and
@@ -115,6 +121,7 @@ def _nest_mark(svg: str, x_mm: float, y_mm: float, width_mm: float, height_mm: f
     return f'<g transform="translate({x_mm:.4f} {y_mm:.4f})">{inner}</g>'
 
 
+# WHY: Agrupa el SVG final y la información usada para manifestar cada posición.
 @dataclass
 class BatchRenderResult:
     svg: str
@@ -123,6 +130,7 @@ class BatchRenderResult:
     manifest: list[dict] = field(default_factory=list)
 
 
+# WHY: Valida asignaciones, conciliación y posiciones y construye una cama de grabado sin mezclar guías visuales con producción.
 def render_batch(
     machine: MachineProfile,
     jig: JigProfile,

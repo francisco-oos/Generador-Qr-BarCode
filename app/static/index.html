@@ -10,25 +10,50 @@
   <header class="topbar">
     <div>
       <div class="eyebrow">SERVER OFICINA</div>
-      <h1>Marking Studio <span class="version">v0.6</span></h1>
+      <h1>Marking Studio <span class="version">v0.6.1</span></h1>
       <p>Identificación física estandarizada · QR · Code 128 · Data Matrix · lotes CSV</p>
     </div>
     <div class="top-actions"><div class="mode-switch" aria-label="Modo de experiencia"><button id="guidedModeBtn" class="mode active">Modo guiado</button><button id="expertModeBtn" class="mode">Modo experto</button></div><div id="licenseBadge" class="badge">Cargando licencia…</div></div>
   </header>
 
-  <nav class="tabs" id="tabs">
-    <button data-tab="individual" class="active">Generador</button>
+  <nav class="tabs" id="tabs" aria-label="Áreas de Marking Studio">
+    <span class="nav-group">Operación</span>
+    <button data-tab="home" class="active">Inicio</button>
+    <button data-tab="individual">Generador</button>
     <button data-tab="batch">Lotes / CSV</button>
-    <button data-tab="verify">Verificar escaneo</button>
+    <button data-tab="verify">Verificar</button>
+    <span class="nav-group">Diseño</span>
     <button data-tab="config">Estudio visual</button>
+    <span class="nav-group">Control</span>
     <button data-tab="history">Histórico</button>
-    <button data-tab="materials">Materiales / Presets</button>
+    <button data-tab="materials">Materiales</button>
     <button data-tab="calibration">Calibración</button>
-    <button data-tab="system">Sistema</button>
+    <button data-tab="system" class="expert-nav">Sistema</button>
   </nav>
 
   <main>
-    <section id="tab-individual" class="tab active">
+    <section id="tab-home" class="tab active">
+      <div class="hero-panel">
+        <div>
+          <div class="eyebrow">FLUJO DE TRABAJO</div>
+          <h2>¿Qué desea hacer?</h2>
+          <p class="muted">Elija una tarea. El modo guiado muestra sólo decisiones necesarias; el modo experto agrega calibración, JSON, importadores y diagnóstico.</p>
+        </div>
+        <div id="homeStatus" class="home-status" aria-live="polite">Cargando catálogo…</div>
+      </div>
+      <div class="home-actions section-gap">
+        <button class="home-card" data-open-tab="individual"><strong>Marcar un equipo</strong><span>Elegir plantilla, capturar ID y obtener SVG/PNG.</span><em>Generador individual →</em></button>
+        <button class="home-card" data-open-tab="batch"><strong>Procesar una lista o CSV</strong><span>Mapear columnas, asignar posiciones y exportar uno o muchos SVG.</span><em>Lotes / CSV →</em></button>
+        <button class="home-card" data-open-tab="config"><strong>Crear o ajustar una plantilla</strong><span>Arrastrar QR, barcode, texto y formas sobre un lienzo en milímetros.</span><em>Estudio visual →</em></button>
+        <button class="home-card" data-open-tab="verify"><strong>Verificar un grabado</strong><span>Comparar el código leído por el escáner contra la identidad esperada.</span><em>Verificar →</em></button>
+      </div>
+      <div class="grid two section-gap">
+        <article class="panel"><h2>Flujo seguro</h2><div class="workflow-line"><span>1</span>Diseñar / seleccionar plantilla</div><div class="workflow-line"><span>2</span>Cargar o capturar datos</div><div class="workflow-line"><span>3</span>Revisar vista previa</div><div class="workflow-line"><span>4</span>Exportar SVG al software de la máquina</div><div class="workflow-line"><span>5</span>Frame + preset validado + grabado</div><div class="workflow-line"><span>6</span>Escanear y confirmar</div></article>
+        <article class="panel"><h2>Principio de seguridad</h2><p>Marking Studio <strong>no sustituye LightBurn, Sculpfun Space ni LaserGRBL</strong>. Genera diseño, lotes, manifiestos y trazabilidad; el software de la máquina conserva movimiento, potencia y disparo.</p><div class="msg ok">Esto permite evolucionar plantillas y datos sin duplicar un controlador láser que ya funciona.</div></article>
+      </div>
+    </section>
+
+    <section id="tab-individual" class="tab">
       <div class="guided-card guided-only"><strong>Flujo rápido:</strong> 1) elija plantilla → 2) escriba el ID → 3) revise la vista previa → 4) exporte SVG → 5) abra en LightBurn/Sculpfun Space → 6) aplique el ajuste del área, haga Frame y grabe → 7) escanee para verificar.</div>
       <div class="grid two">
         <article class="panel">
@@ -51,7 +76,14 @@
     </section>
 
     <section id="tab-batch" class="tab">
-      <div class="grid two">
+      <div class="guided-card guided-only"><strong>Flujo por lote:</strong> cargue cualquier CSV/lista → confirme qué columna alimenta cada campo → previsualice → acomode el lote físico → concilie lo escrito/escaneado → exporte. Un CSV de una sola columna también es válido.</div>
+      <div id="batchStepper" class="stepper" aria-label="Progreso del lote">
+        <div class="step active" data-batch-step="1"><span>1</span><strong>Datos</strong><small>CSV / serie</small></div>
+        <div class="step" data-batch-step="2"><span>2</span><strong>Mapeo</strong><small>campos</small></div>
+        <div class="step" data-batch-step="3"><span>3</span><strong>Posiciones</strong><small>jig / conciliación</small></div>
+        <div class="step" data-batch-step="4"><span>4</span><strong>Salida</strong><small>ZIP / SVG</small></div>
+      </div>
+      <div class="grid two section-gap">
         <article class="panel">
           <h2>1. Cargar lote</h2>
           <label>Plantilla<select id="batchTemplate"></select></label>
@@ -99,6 +131,7 @@
     </section>
 
     <section id="tab-verify" class="tab">
+      <div class="guided-card guided-only"><strong>Objetivo:</strong> confirmar que el marcado físico devuelve exactamente la identidad esperada. Para validación formal deje desactivada la normalización.</div>
       <article class="panel narrow">
         <h2>Verificación posterior al grabado</h2>
         <p>Coloque el cursor en “Escaneado” y dispare el lector. El Steren COM-597 y otros lectores USB tipo teclado escriben aquí el código leído. Si usa otro lector, seleccione una simbología compatible con ese equipo.</p>
@@ -189,6 +222,10 @@
             <div class="actions"><button id="duplicateElementBtn">Duplicar elemento</button><button id="deleteElementBtn" class="danger">Eliminar</button></div>
           </div>
           <div class="series-box section-gap">
+            <div class="panel-head"><strong>Capas / elementos</strong><span class="muted">clic para seleccionar</span></div>
+            <div id="designerLayerList" class="layer-list"></div>
+          </div>
+          <div class="series-box section-gap">
             <strong>Identidad principal</strong>
             <label>Campo usado para conciliación / nombre de archivo<select id="designerPrimaryField"></select></label>
             <p class="hint">No está fijado en el código: cada plantilla decide cuál es su identidad operativa.</p>
@@ -203,6 +240,7 @@
     </section>
 
     <section id="tab-history" class="tab">
+      <div class="guided-card guided-only"><strong>Histórico:</strong> consulte qué identidad se generó, con qué plantilla y si ya fue verificada por escaneo. Esta vista será la base de sincronización futura con Server Oficina.</div>
       <article class="panel">
         <div class="panel-head"><h2>Histórico local de marcados</h2><button id="refreshHistoryBtn">Actualizar</button></div>
         <div id="historyTable" class="table-wrap"></div>
@@ -211,6 +249,7 @@
 
 
     <section id="tab-materials" class="tab">
+      <div class="guided-card guided-only"><strong>Regla práctica:</strong> si el área ya tiene un ajuste visible y probado para la misma máquina y superficie, consérvelo. Use la biblioteca como referencia y Material Test sólo cuando haga falta.</div>
       <div class="grid two">
         <article class="panel">
           <h2>Biblioteca de materiales</h2>
@@ -289,6 +328,7 @@
     </section>
 
     <section id="tab-system" class="tab">
+      <div class="guided-card"><strong>Área técnica:</strong> licencia, importación de configuración y diagnóstico read-only. No es necesaria para el operador que sólo genera y verifica marcados.</div>
       <div class="grid two">
         <article class="panel">
           <h2>Licencia</h2><pre id="licenseJson"></pre>

@@ -30,6 +30,7 @@ except Exception:  # pragma: no cover - exercised when dependency intentionally 
     list_ports = None
 
 
+# WHY: Fallback serial POSIX mínimo para diagnóstico read-only cuando pyserial no esté disponible.
 class _NativePosixSerial:
     """Tiny POSIX fallback used only for the read-only diagnostic.
 
@@ -37,6 +38,7 @@ class _NativePosixSerial:
     fallback keeps Linux/macOS diagnostics available in offline environments and
     is deliberately too small to become a general machine-control transport.
     """
+    # WHY: Abre/configura el puerto POSIX con timeout explícito para no bloquear indefinidamente la estación.
     def __init__(self, port: str, baudrate: int, timeout: float, write_timeout: float):
         import os, termios
         self._os = os
@@ -60,15 +62,22 @@ class _NativePosixSerial:
         termios.tcsetattr(self.fd, termios.TCSANOW, attrs)
         os.set_blocking(self.fd, True)
         self._buffer = bytearray()
+    # WHY: Permite usar el puerto como context manager y garantizar cierre incluso ante errores.
     def __enter__(self): return self
+    # WHY: Cierra siempre el descriptor al salir del contexto para liberar la controladora a LightBurn/LaserGRBL.
     def __exit__(self, *args): self.close(); return False
+    # WHY: Libera el descriptor nativo de forma idempotente.
     def close(self):
         if getattr(self, "fd", None) is not None:
             self._os.close(self.fd); self.fd = None
+    # WHY: Envía bytes exclusivamente a través de la capa que filtra los comandos seguros.
     def write(self, payload: bytes): return self._os.write(self.fd, payload)
+    # WHY: Mantiene compatibilidad con la interfaz serial usada por el probe sin añadir comportamiento de máquina.
     def flush(self): return None
+    # WHY: Descarta respuesta vieja antes del diagnóstico para no atribuirla al comando actual.
     def reset_input_buffer(self):
         self._termios.tcflush(self.fd, self._termios.TCIFLUSH)
+    # WHY: Lee una línea con timeout para recopilar respuestas GRBL sin dejar la UI bloqueada.
     def readline(self) -> bytes:
         import select, time
         deadline = time.monotonic() + self.timeout
@@ -86,6 +95,7 @@ class _NativePosixSerial:
         return b""
 
 
+# WHY: Selecciona pyserial o fallback POSIX manteniendo una interfaz común y testeable.
 def _serial_context(port: str, baud: int, timeout: float):
     if serial is not None:
         return serial.Serial(port=port, baudrate=baud, timeout=timeout, write_timeout=timeout)
@@ -98,6 +108,7 @@ def _serial_context(port: str, baud: int, timeout: float):
 SAFE_GRBL_COMMANDS = ("$I", "$$")
 
 
+# WHY: Resultado normalizado de cualquier importador, con fuente, hash y presets detectados.
 @dataclass(frozen=True)
 class ImportedConfiguration:
     source_type: str
@@ -107,10 +118,12 @@ class ImportedConfiguration:
     warnings: list[str]
 
 
+# WHY: Calcula huella de origen para auditar que un ajuste proviene exactamente del archivo importado.
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+# WHY: Interpreta parámetros $n=v sin escribirlos, permitiendo documentar la controladora existente.
 def parse_grbl_dump(text: str) -> dict[str, Any]:
     """Parse a GRBL ``$$`` / ``$I`` transcript without applying any changes."""
     settings: dict[str, str] = {}
@@ -144,6 +157,7 @@ def parse_grbl_dump(text: str) -> dict[str, Any]:
     }
 
 
+# WHY: Descubre puertos candidatos; no abre ni opera ninguno hasta acción explícita del usuario.
 def list_serial_devices() -> list[dict[str, Any]]:
     """Return serial-port metadata on Windows/Linux/macOS without opening ports."""
     if list_ports is None:
@@ -174,6 +188,7 @@ def list_serial_devices() -> list[dict[str, Any]]:
     return result
 
 
+# WHY: Consulta únicamente $I y $$, invariantes de seguridad que impiden movimiento o activación del láser.
 def probe_grbl_readonly(port: str, baud: int = 115200, timeout: float = 1.2) -> dict[str, Any]:
     """Open one serial port and issue only the safe read-only GRBL queries.
 
@@ -214,6 +229,7 @@ def probe_grbl_readonly(port: str, baud: int = 115200, timeout: float = 1.2) -> 
     return parsed
 
 
+# WHY: Compara parámetros reales contra perfil para advertir diferencias sin corregirlas automáticamente.
 def compare_grbl_to_profile(parsed: dict[str, Any], machine: Any | None) -> list[str]:
     """Return non-destructive diagnostic notes comparing GRBL limits to a profile.
 
@@ -242,6 +258,7 @@ def compare_grbl_to_profile(parsed: dict[str, Any], machine: Any | None) -> list
     return notes
 
 
+# WHY: Lee atributos heterogéneos de objetos LightBurn de forma tolerante a versiones.
 def _value_attr(parent: ET.Element, name: str) -> str | None:
     node = parent.find(name)
     if node is None:
@@ -249,6 +266,7 @@ def _value_attr(parent: ET.Element, name: str) -> str | None:
     return node.attrib.get("Value") or (node.text.strip() if node.text else None)
 
 
+# WHY: Convierte valores textuales importados a tipos simples conservando lo desconocido como texto.
 def _coerce(value: str | None) -> Any:
     if value is None:
         return None
@@ -262,6 +280,7 @@ def _coerce(value: str | None) -> Any:
         return v
 
 
+# WHY: Normaliza un ajuste de corte/grabado de LightBurn a campos auditables del dominio.
 def _cut_setting_to_dict(node: ET.Element) -> dict[str, Any]:
     keys = [
         "index", "name", "minPower", "maxPower", "speed", "interval", "numPasses",
@@ -276,6 +295,7 @@ def _cut_setting_to_dict(node: ET.Element) -> dict[str, Any]:
     return data
 
 
+# WHY: Extrae presets de una Material Library de LightBurn sin modificarla.
 def parse_lightburn_clb(data: bytes, source_name: str = "library.clb") -> ImportedConfiguration:
     """Read LightBurn's XML material library (.clb) into portable presets."""
     root = ET.fromstring(data)
@@ -302,6 +322,7 @@ def parse_lightburn_clb(data: bytes, source_name: str = "library.clb") -> Import
     )
 
 
+# WHY: Inspecciona proyectos LightBurn para rescatar parámetros ya usados por el área.
 def parse_lightburn_project(data: bytes, source_name: str = "project.lbrn2") -> ImportedConfiguration:
     """Extract cut-layer settings from a LightBurn .lbrn/.lbrn2 project."""
     root = ET.fromstring(data)
@@ -321,6 +342,7 @@ def parse_lightburn_project(data: bytes, source_name: str = "project.lbrn2") -> 
     )
 
 
+# WHY: Recorre estructuras JSON anidadas para localizar ajustes en variantes de formato de LightBurn.
 def _walk_json(obj: Any, out: dict[str, Any], prefix: str = "") -> None:
     """Flatten useful Desc/Value records from LightBurn .lbset variants."""
     if isinstance(obj, dict):
@@ -334,6 +356,7 @@ def _walk_json(obj: Any, out: dict[str, Any], prefix: str = "") -> None:
             _walk_json(value, out, f"{prefix}[{i}]")
 
 
+# WHY: Extrae preferencias/ajustes legibles de archivos de configuración LightBurn.
 def parse_lightburn_lbset(data: bytes, source_name: str = "machine.lbset") -> ImportedConfiguration:
     """Read a LightBurn Machine Settings backup.
 
@@ -360,6 +383,7 @@ def parse_lightburn_lbset(data: bytes, source_name: str = "machine.lbset") -> Im
     )
 
 
+# WHY: Inspecciona respaldos/ZIP de LightBurn y agrega artefactos reconocibles en modo sólo lectura.
 def parse_lightburn_bundle(data: bytes, source_name: str = "bundle.lbzip") -> ImportedConfiguration:
     """Inspect a LightBurn User Bundle and extract readable material/device data."""
     warnings: list[str] = []
@@ -404,6 +428,7 @@ def parse_lightburn_bundle(data: bytes, source_name: str = "bundle.lbzip") -> Im
 
 
 
+# WHY: Extrae presets de Material Test para conservar pruebas que el taller ya realizó.
 def parse_lightburn_lbmt(data: bytes, source_name: str = "material_test_presets.lbmt") -> ImportedConfiguration:
     """Parse LightBurn Material Test preset files (.lbmt).
 
@@ -447,6 +472,7 @@ def parse_lightburn_lbmt(data: bytes, source_name: str = "material_test_presets.
     )
 
 
+# WHY: Recupera campos útiles de preferencias LightBurn sin asumir que son parámetros productivos.
 def parse_lightburn_prefs(data: bytes, source_name: str = "prefs.ini") -> ImportedConfiguration:
     """Read LightBurn user preferences conservatively.
 
@@ -482,6 +508,7 @@ def parse_lightburn_prefs(data: bytes, source_name: str = "prefs.ini") -> Import
     )
 
 
+# WHY: Enumera rutas conocidas por sistema operativo para descubrimiento local no destructivo.
 def lightburn_pref_roots(home: Path | None = None, system: str | None = None, env: dict[str, str] | None = None) -> list[Path]:
     """Return documented/conventional LightBurn preference roots for one host.
 
@@ -512,6 +539,7 @@ def lightburn_pref_roots(home: Path | None = None, system: str | None = None, en
     return out
 
 
+# WHY: Busca artefactos candidatos y devuelve metadatos; no los importa automáticamente para mantener consentimiento explícito.
 def discover_lightburn_artifacts(roots: list[Path] | None = None, max_files: int = 250) -> dict[str, Any]:
     """Discover existing LightBurn settings without modifying or opening the laser.
 
@@ -575,6 +603,7 @@ def discover_lightburn_artifacts(roots: list[Path] | None = None, max_files: int
     return {"roots": [str(r) for r in roots], "artifacts": sorted(found.values(), key=lambda x: (x["name"].lower(), x["path"])), "read_only": True}
 
 
+# WHY: Importa sólo un artefacto elegido previamente por el operador y conserva su hash/origen.
 def import_discovered_lightburn_artifact(path: str, allowed: list[dict[str, Any]] | None = None) -> ImportedConfiguration:
     """Import exactly one artifact previously returned by discovery.
 
@@ -592,6 +621,7 @@ def import_discovered_lightburn_artifact(path: str, allowed: list[dict[str, Any]
         return parse_lightburn_prefs(raw, p.name)
     return import_configuration_bytes(p.name, raw)
 
+# WHY: Despacha bytes al parser correcto por extensión/contenido y unifica su resultado.
 def import_configuration_bytes(filename: str, data: bytes) -> ImportedConfiguration:
     """Dispatch a supported workshop-export file to the safest parser."""
     path = Path(filename)
@@ -625,10 +655,12 @@ def import_configuration_bytes(filename: str, data: bytes) -> ImportedConfigurat
 # LaserGRBL material database interoperability
 # ---------------------------------------------------------------------------
 
+# WHY: Extrae nombre local de etiquetas XML para tolerar namespaces en LaserGRBL.
 def _local_tag(tag: str) -> str:
     return tag.split('}', 1)[-1] if '}' in tag else tag
 
 
+# WHY: Extrae biblioteca de materiales LaserGRBL como referencia reproducible.
 def parse_lasergrbl_psh(data: bytes, source_name: str = "UserMaterials.psh") -> ImportedConfiguration:
     """Parse LaserGRBL's XML material database (.psh) read-only.
 
@@ -677,6 +709,7 @@ def parse_lasergrbl_psh(data: bytes, source_name: str = "UserMaterials.psh") -> 
     )
 
 
+# WHY: Calcula rutas conocidas de LaserGRBL, principalmente en Windows, sin asumir que la app está instalada.
 def lasergrbl_roots(home: Path | None = None, system: str | None = None, env: dict[str, str] | None = None) -> list[Path]:
     """Return the conventional LaserGRBL per-user data root.
 
@@ -692,6 +725,7 @@ def lasergrbl_roots(home: Path | None = None, system: str | None = None, env: di
     return [Path(appdata) / "LaserGRBL"] if appdata else [home / "AppData" / "Roaming" / "LaserGRBL"]
 
 
+# WHY: Busca bases de materiales y devuelve candidatos para selección humana.
 def discover_lasergrbl_artifacts(roots: list[Path] | None = None) -> dict[str, Any]:
     roots = [Path(x).expanduser() for x in (roots if roots is not None else lasergrbl_roots())]
     artifacts: list[dict[str, Any]] = []
@@ -711,6 +745,7 @@ def discover_lasergrbl_artifacts(roots: list[Path] | None = None) -> dict[str, A
     return {"roots": [str(x) for x in roots], "artifacts": artifacts, "read_only": True}
 
 
+# WHY: Importa la base LaserGRBL seleccionada manteniendo el mismo contrato de procedencia/hashes.
 def import_discovered_lasergrbl_artifact(path: str, allowed: list[dict[str, Any]] | None = None) -> ImportedConfiguration:
     discovered = allowed if allowed is not None else discover_lasergrbl_artifacts()["artifacts"]
     allowed_paths = {str(Path(x["path"]).resolve()) for x in discovered}

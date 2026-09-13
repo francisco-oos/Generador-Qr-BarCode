@@ -77,9 +77,10 @@ from .material_catalog import phone_reference, search_material_reference
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "app" / "static"
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 
+# WHY: Inicializa almacenamiento y recursos una sola vez al arrancar/cerrar la aplicación.
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
@@ -95,10 +96,12 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
+# WHY: Centraliza lectura de licencia para no repetir lógica de autorización en cada ruta.
 def _license_status() -> dict[str, Any]:
     return get_license_provider().status()
 
 
+# WHY: Bloquea rutas operativas cuando la autorización no es válida, antes de ejecutar lógica o escribir histórico.
 def _require_license() -> dict[str, Any]:
     status = _license_status()
     if not status.get("valid"):
@@ -106,11 +109,13 @@ def _require_license() -> dict[str, Any]:
     return status
 
 
+# WHY: Sirve la interfaz local desde el mismo proceso para simplificar instalación en Windows/Linux/macOS.
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC / "index.html")
 
 
+# WHY: Expone versión, capacidades y límites de seguridad para diagnóstico/automatización.
 @app.get("/api/health")
 def health() -> dict[str, Any]:
     license_status = _license_status()
@@ -129,11 +134,13 @@ def health() -> dict[str, Any]:
     }
 
 
+# WHY: Permite a la UI mostrar estado de licencia sin acceder directamente a archivos de firma.
 @app.get("/api/license")
 def license_status() -> dict[str, Any]:
     return _license_status()
 
 
+# WHY: Entrega plantillas, jigs, máquinas, lectores y calidad desde configuración, evitando catálogos duplicados en JavaScript.
 @app.get("/api/catalog")
 def catalog() -> dict[str, Any]:
     _require_license()
@@ -156,6 +163,7 @@ def catalog() -> dict[str, Any]:
     }
 
 
+# WHY: Renderiza una marca individual usando la ruta autoritativa del template engine.
 @app.post("/api/render")
 def render(req: RenderRequest):
     _require_license()
@@ -190,6 +198,7 @@ def render(req: RenderRequest):
     }
 
 
+# WHY: Analiza CSV/listas y devuelve columnas/filas para que el usuario mapee datos sin formato rígido.
 @app.post("/api/csv/inspect")
 async def csv_inspect(file: UploadFile = File(...), header_mode: str = "auto") -> dict[str, Any]:
     _require_license()
@@ -217,6 +226,7 @@ async def csv_inspect(file: UploadFile = File(...), header_mode: str = "auto") -
     }
 
 
+# WHY: Genera secuencias explícitas y limitadas cuando la regla de numeración es conocida.
 @app.post("/api/series/generate")
 def series_generate(req: SeriesGenerateRequest) -> dict[str, Any]:
     _require_license()
@@ -238,6 +248,7 @@ def series_generate(req: SeriesGenerateRequest) -> dict[str, Any]:
     }
 
 
+# WHY: Valida un lote, renderiza el jig, registra auditoría y entrega un ZIP listo para handoff.
 @app.post("/api/batch/export")
 def batch_export(req: BatchExportRequest):
     license_info = _require_license()
@@ -316,6 +327,7 @@ def batch_export(req: BatchExportRequest):
     )
 
 
+# WHY: Compara lectura real con identidad esperada y registra verificación sólo si coincide.
 @app.post("/api/scan/verify")
 def scan_verify(req: ScanVerifyRequest) -> dict[str, Any]:
     _require_license()
@@ -328,6 +340,7 @@ def scan_verify(req: ScanVerifyRequest) -> dict[str, Any]:
     return result
 
 
+# WHY: Expone histórico reciente sin dar acceso directo a SQLite.
 @app.get("/api/history")
 def get_history(limit: int = 100) -> dict[str, Any]:
     _require_license()
@@ -336,6 +349,7 @@ def get_history(limit: int = 100) -> dict[str, Any]:
 
 
 
+# WHY: Previsualiza un borrador no guardado con el mismo motor usado en producción.
 @app.post("/api/templates/preview")
 def preview_template_api(req: TemplatePreviewRequest):
     """Render a visual-designer draft without saving or touching machine state."""
@@ -357,6 +371,7 @@ def preview_template_api(req: TemplatePreviewRequest):
     }
 
 
+# WHY: Genera un SVG por fila para lotes sin jig, manteniendo nombres y manifiesto deterministas.
 @app.post("/api/bulk/svg-export")
 def bulk_svg_export(req: BulkTemplateExportRequest):
     """Generate up to 10k individual SVGs from one saved template and mapped rows."""
@@ -368,6 +383,7 @@ def bulk_svg_export(req: BulkTemplateExportRequest):
     if not quality:
         raise HTTPException(500, f"Perfil de calidad no encontrado: {template.quality_profile}")
 
+    # WHY: Aísla safe_name para que el flujo sea testeable, mantenible y fácil de auditar.
     def safe_name(value: str, index: int) -> str:
         base = re.sub(r"[^A-Za-z0-9._-]+", "_", value.strip())[:100].strip("._-")
         return base or f"mark_{index:05d}"
@@ -408,6 +424,7 @@ def bulk_svg_export(req: BulkTemplateExportRequest):
     )
 
 
+# WHY: Valida y guarda plantillas del estudio visual como datos configurables.
 @app.post("/api/templates/save")
 def save_template_api(req: TemplateSaveRequest) -> dict[str, Any]:
     _require_license()
@@ -415,6 +432,7 @@ def save_template_api(req: TemplateSaveRequest) -> dict[str, Any]:
     return {"saved": True, "id": req.template.id, "path": str(path.relative_to(ROOT))}
 
 
+# WHY: Actualiza una regla de captura específica sin obligar al frontend a reescribir a ciegas el archivo entero.
 @app.post("/api/templates/input-rule")
 def template_input_rule(req: TemplateInputRuleUpdateRequest) -> dict[str, Any]:
     """Friendly endpoint used by the template editor's prefix/suffix assistant."""
@@ -437,6 +455,7 @@ def template_input_rule(req: TemplateInputRuleUpdateRequest) -> dict[str, Any]:
     return {"saved": True, "template": template.model_dump(), "path": str(path.relative_to(ROOT))}
 
 
+# WHY: Valida y guarda bases físicas configurables desde modo experto.
 @app.post("/api/jigs/save")
 def save_jig_api(req: JigSaveRequest) -> dict[str, Any]:
     _require_license()
@@ -448,12 +467,14 @@ def save_jig_api(req: JigSaveRequest) -> dict[str, Any]:
 # Material / phone research reference
 # ---------------------------------------------------------------------------
 
+# WHY: Consulta la biblioteca de referencia y conserva sus advertencias/política de seguridad.
 @app.get("/api/materials/reference")
 def materials_reference(q: str = "", category: str | None = None) -> dict[str, Any]:
     _require_license()
     return search_material_reference(q, category)
 
 
+# WHY: Devuelve conocimiento de superficie por modelo sin inventar material cuando no está confirmado.
 @app.get("/api/materials/phone")
 def materials_phone(brand: str, model: str = "") -> dict[str, Any]:
     _require_license()
@@ -469,12 +490,14 @@ def materials_phone(brand: str, model: str = "") -> dict[str, Any]:
 # Machine interoperability / settings capture
 # ---------------------------------------------------------------------------
 
+# WHY: Lista puertos seriales para diagnóstico explícito, sin abrirlos ni transmitir comandos.
 @app.get("/api/machine/ports")
 def machine_ports() -> dict[str, Any]:
     _require_license()
     return {"ports": list_serial_devices(), "read_only": True}
 
 
+# WHY: Descubre artefactos LightBurn locales en modo lectura para rescatar conocimiento del taller.
 @app.get("/api/machine/lightburn/discover")
 def machine_lightburn_discover() -> dict[str, Any]:
     _require_license()
@@ -486,6 +509,7 @@ def machine_lightburn_discover() -> dict[str, Any]:
     return result
 
 
+# WHY: Importa un artefacto previamente seleccionado y registra su procedencia/presets.
 @app.post("/api/machine/lightburn/import-local")
 def machine_lightburn_import_local(req: LocalArtifactImportRequest) -> dict[str, Any]:
     _require_license()
@@ -519,12 +543,14 @@ def machine_lightburn_import_local(req: LocalArtifactImportRequest) -> dict[str,
     }
 
 
+# WHY: Interpreta texto GRBL pegado/subido sin necesidad de conectar la grabadora.
 @app.post("/api/machine/grbl/parse")
 def machine_parse_grbl(req: GrblParseRequest) -> dict[str, Any]:
     _require_license()
     return parse_grbl_dump(req.text)
 
 
+# WHY: Ejecuta el probe read-only limitado a $I/$$ y registra la captura.
 @app.post("/api/machine/grbl/probe")
 def machine_probe_grbl(req: GrblProbeRequest) -> dict[str, Any]:
     _require_license()
@@ -553,6 +579,7 @@ def machine_probe_grbl(req: GrblProbeRequest) -> dict[str, Any]:
     return result
 
 
+# WHY: Importa configuraciones subidas de LightBurn/LaserGRBL/GRBL a través del parser unificado.
 @app.post("/api/machine/import")
 async def machine_import(file: UploadFile = File(...), machine_profile_id: str | None = None) -> dict[str, Any]:
     """Import shop-owned LightBurn/GRBL exports without changing the controller."""
@@ -599,6 +626,7 @@ async def machine_import(file: UploadFile = File(...), machine_profile_id: str |
     }
 
 
+# WHY: Devuelve capturas y presets para selección/auditoría en la UI.
 @app.get("/api/machine/captures")
 def machine_capture_history(limit: int = 100) -> dict[str, Any]:
     _require_license()
@@ -611,6 +639,7 @@ def machine_capture_history(limit: int = 100) -> dict[str, Any]:
 # Jig calibration / reference geometry
 # ---------------------------------------------------------------------------
 
+# WHY: Genera referencias/archivo de calibración de un jig sin mezclarlas con grabado productivo.
 @app.get("/api/calibration/jig/{jig_id}")
 def calibration_jig(jig_id: str) -> dict[str, Any]:
     _require_license()
@@ -634,6 +663,7 @@ def calibration_jig(jig_id: str) -> dict[str, Any]:
     }
 
 
+# WHY: Evalúa mediciones de P0/PX/PY y devuelve errores geométricos para decisión humana.
 @app.post("/api/calibration/evaluate")
 def calibration_evaluate(req: CalibrationEvaluationRequest) -> dict[str, Any]:
     _require_license()
@@ -651,6 +681,7 @@ def calibration_evaluate(req: CalibrationEvaluationRequest) -> dict[str, Any]:
 # Locally proven workshop presets
 # ---------------------------------------------------------------------------
 
+# WHY: Guarda un ajuste del área y sólo lo marca validado si el operador confirma misma máquina/superficie.
 @app.post("/api/materials/shop-preset")
 def save_shop_material_preset(req: ShopMaterialPresetRequest) -> dict[str, Any]:
     _require_license()
@@ -670,6 +701,7 @@ def save_shop_material_preset(req: ShopMaterialPresetRequest) -> dict[str, Any]:
 # LaserGRBL local material database discovery (Windows workstation)
 # ---------------------------------------------------------------------------
 
+# WHY: Descubre bibliotecas LaserGRBL locales sin importarlas ni cambiarlas.
 @app.get("/api/machine/lasergrbl/discover")
 def machine_lasergrbl_discover() -> dict[str, Any]:
     _require_license()
@@ -678,6 +710,7 @@ def machine_lasergrbl_discover() -> dict[str, Any]:
     return result
 
 
+# WHY: Importa una biblioteca LaserGRBL seleccionada en modo sólo lectura y registra sus presets.
 @app.post("/api/machine/lasergrbl/import-local")
 def machine_lasergrbl_import_local(req: LocalArtifactImportRequest) -> dict[str, Any]:
     _require_license()

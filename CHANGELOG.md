@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.1 — 2026-09-12
+
+- Auditoría de mantenibilidad: comentarios `WHY:` junto a todas las funciones/clases Python y funciones JavaScript nombradas, explicando intención y límites.
+- Añadida `CODE_REVIEW_GUIDE.md` con inventario de módulos, símbolos, línea y razón de existir para revisión posterior.
+- Añadidas `MAINTAINER_GUIDE.md` y `UX_AND_WORKFLOW.md` con invariantes, extensión sin hardcodeo y razonamiento de interfaz.
+- Interfaz reorganizada por tarea: Inicio, Operación, Diseño y Control; `Sistema` queda oculto en modo guiado.
+- Nueva portada con acciones frecuentes y resumen de catálogo.
+- Preview individual en vivo mientras se captura, con debounce para no saturar el backend.
+- Lotes/CSV muestran stepper Datos → Mapeo → Posiciones → Salida.
+- Estudio visual añade lista de capas/elementos para seleccionar objetos pequeños o superpuestos.
+- QA ampliado con contratos de documentación/UX y validación visual por Chromium en el host de pruebas.
+
 ## 0.6.0 — 2026-09-12
 
 - Replanteado el producto como **Estudio visual de marcado con plantillas**, no sólo selector de perfiles predefinidos.

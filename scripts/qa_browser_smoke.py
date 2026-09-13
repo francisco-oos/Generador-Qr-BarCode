@@ -30,7 +30,7 @@ def api_static_fallback() -> dict:
     result: dict[str, object] = {}
     with TestClient(app) as client:
         health = client.get("/api/health")
-        result["health"] = health.status_code == 200 and health.json().get("version") == "0.6.0"
+        result["health"] = health.status_code == 200 and health.json().get("version") == "0.6.1"
         index = client.get("/")
         text = index.text
         result["index"] = index.status_code == 200

@@ -1,4 +1,4 @@
-# Reporte de pruebas — Server Oficina Marking Studio v0.6.0
+# Reporte de pruebas — Server Oficina Marking Studio v0.6.1
 
 Fecha de cierre: 2026-09-12
 
@@ -6,16 +6,16 @@ Fecha de cierre: 2026-09-12
 
 **Estado de software: PASS / listo para piloto físico controlado.**
 
-La v0.6 añade el Estudio visual de marcado, CSV/listas flexibles y exportación masiva de SVG sin cambiar el límite de seguridad: Marking Studio genera diseño y trazabilidad; el software de la grabadora continúa controlando movimiento, potencia y disparo.
+La v0.6.1 conserva el Estudio visual de marcado, CSV/listas flexibles y exportación masiva de SVG sin cambiar el límite de seguridad: Marking Studio genera diseño y trazabilidad; el software de la grabadora continúa controlando movimiento, potencia y disparo.
 
 ## Matriz final
 
 | Prueba | Resultado |
 |---|---|
-| Pytest | **48/48 PASS** |
+| Pytest | **55/55 PASS** |
 | `compileall` | **PASS** |
 | JavaScript `node --check` | **PASS** |
-| API `/api/health` | **PASS · v0.6.0** |
+| API `/api/health` | **PASS · v0.6.1** |
 | Catálogo/configuración | **PASS** |
 | Render de todas las plantillas guardadas | **PASS** |
 | Preview de plantilla visual no persistida | **PASS** |
@@ -112,10 +112,10 @@ Además se generó `samples/output/visual_designer_composite.svg` y PNG 600 DPI 
 - registros: 1,200;
 - jig: 12;
 - cargas: 100;
-- 2,500 renders individuales: ~5.17 s;
-- ~483 marcas/s en este host;
-- batch vectorial de 1,200: ~2.43 s;
-- PNG de última cama 300 DPI: ~5.37 s;
+- 2,500 renders individuales: ~5.03 s;
+- ~496.6 marcas/s en este host;
+- batch vectorial de 1,200: ~2.41 s;
+- PNG de última cama 300 DPI: ~5.64 s;
 - estado: **PASS**.
 
 Estas cifras no prometen el mismo rendimiento en otra PC; prueban que la arquitectura no depende de datasets pequeños.
@@ -138,6 +138,21 @@ No se certifica digitalmente:
 - lectura real bajo suciedad/campo.
 
 Eso requiere la SCULPFUN, el material real y el lector operativo. El software ya contiene el procedimiento para capturar el preset que el área utiliza, hacer Frame/calibración y verificar por escaneo.
+
+## Auditoría de mantenibilidad y UX v0.6.1
+
+Se añadieron pruebas de contrato que fallan si una función/clase Python pierde su explicación `WHY:`/docstring o si una función JavaScript nombrada queda sin rationale cercano. También se valida que el paquete incluya y enlace `CODE_REVIEW_GUIDE.md`, `MAINTAINER_GUIDE.md` y `UX_AND_WORKFLOW.md`.
+
+La interfaz se revisó por objetivo operativo y ahora dispone de:
+
+- portada por tareas;
+- navegación agrupada Operación / Diseño / Control;
+- `Sistema` oculto en modo guiado;
+- preview individual en vivo con debounce;
+- stepper visible para Datos → Mapeo → Posiciones → Salida;
+- lista de capas en el Estudio visual para seleccionar objetos pequeños o superpuestos.
+
+Los contratos HTML↔JS, IDs únicos, drag/drop y ausencia de comandos productivos de máquina permanecen en PASS.
 
 ## Browser E2E
 

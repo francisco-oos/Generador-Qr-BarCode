@@ -15,6 +15,7 @@ from xml.sax.saxutils import escape
 from .models import CalibrationPoint, JigProfile, MachineProfile
 
 
+# WHY: Obtiene el rectángulo físico ocupado por un jig para ubicar referencias sin depender de números escritos a mano.
 def _grid_extents(jig: JigProfile) -> tuple[float, float]:
     g = jig.grid
     x_span = max(g.slot_width_mm, (g.cols - 1) * g.pitch_x_mm + g.slot_width_mm)
@@ -22,6 +23,7 @@ def _grid_extents(jig: JigProfile) -> tuple[float, float]:
     return x_span, y_span
 
 
+# WHY: Define P0/PX/PY esperados como base mínima para detectar desplazamiento, escala y giro.
 def jig_reference_points(jig: JigProfile) -> list[CalibrationPoint]:
     """Return three repeatable physical datums for a jig.
 
@@ -38,6 +40,7 @@ def jig_reference_points(jig: JigProfile) -> list[CalibrationPoint]:
     ]
 
 
+# WHY: Genera un patrón explícitamente separado de producción para medir el sistema sin usar activos buenos.
 def calibration_target_svg(machine: MachineProfile, jig: JigProfile) -> str:
     """Generate a machine-bed SVG containing non-production calibration marks."""
     points = jig_reference_points(jig)
@@ -64,18 +67,22 @@ def calibration_target_svg(machine: MachineProfile, jig: JigProfile) -> str:
     return ''.join(parts)
 
 
+# WHY: Convierte dos puntos en vector para reutilizar la misma matemática en escala y ángulo.
 def _vector(a: CalibrationPoint, b: CalibrationPoint) -> tuple[float, float]:
     return b.x_mm - a.x_mm, b.y_mm - a.y_mm
 
 
+# WHY: Calcula longitud euclidiana de un vector durante evaluación de escala.
 def _length(v: tuple[float, float]) -> float:
     return hypot(v[0], v[1])
 
 
+# WHY: Calcula orientación de un vector para cuantificar rotación del jig/ejes.
 def _angle(v: tuple[float, float]) -> float:
     return degrees(atan2(v[1], v[0]))
 
 
+# WHY: Compara referencias medidas y esperadas y devuelve errores comprensibles sin corregir automáticamente la máquina.
 def evaluate_reference_points(expected: Iterable[CalibrationPoint], measured: Iterable[CalibrationPoint]) -> dict:
     """Evaluate translation, scale and squareness from P0/PX/PY measurements.
 

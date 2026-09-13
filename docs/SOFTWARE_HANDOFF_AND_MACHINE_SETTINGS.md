@@ -1,7 +1,7 @@
 # Handoff de software y conservación de ajustes de máquina
 
 Fecha: 2026-09-12  
-Versión: 0.6.0
+Versión: 0.6.1
 
 ## Responsabilidades
 

@@ -1,22 +1,26 @@
 {
   "project": "Server Oficina Marking Studio",
-  "version": "0.6.0",
-  "generated_at_utc": "2026-09-12T14:15:36.196386+00:00",
+  "version": "0.6.1",
+  "generated_at_utc": "2026-09-12T16:14:29.611440+00:00",
   "status": "PASS_SOFTWARE_READY_FOR_CONTROLLED_PHYSICAL_PILOT",
   "scope": {
-    "visual_template_studio": "PASS — click + drag/drop, mm geometry, live production-engine SVG preview",
-    "csv_flexibility": "PASS — auto/forced headers, headerless one-column lists, multi-column mapping, template-owned aliases",
-    "hardcoding_reduction": "PASS — operational identity/prefix/suffix/CSV aliases/elements live in template/configuration",
-    "bulk_generation": "PASS — one SVG per row up to 10000/request; tested 1000 and 5000",
-    "machine_boundary": "PASS — document handoff only; no production movement/power commands",
-    "shop_settings": "PASS — read-only import/capture of LightBurn/LaserGRBL/GRBL data",
-    "calibration": "PASS — P0/PX/PY diagnostic SVG/evaluation; physical jig approval still required",
-    "scanner_profile": "PASS — Steren COM-597 documented; legacy 1D compatibility retained"
+    "maintainability": "PASS — comentarios WHY junto a responsabilidades Python/JavaScript + guías de revisión/mantenimiento",
+    "ux_flow": "PASS — Inicio por tareas, navegación Operación/Diseño/Control, modo guiado/experto, preview vivo, stepper y capas",
+    "visual_template_studio": "PASS — click + drag/drop, geometría mm, selección por canvas/capas, preview SVG del motor productivo",
+    "csv_flexibility": "PASS — auto/forced headers, listas sin encabezado de una columna, mapeo multicolumna y aliases por plantilla",
+    "hardcoding_reduction": "PASS — identidad/prefijo/sufijo/CSV aliases/elementos permanecen en plantilla/configuración",
+    "bulk_generation": "PASS — un SVG por fila hasta 10000/request; probado 1000 y 5000",
+    "machine_boundary": "PASS — handoff documental; sin streaming productivo, movimiento ni potencia",
+    "shop_settings": "PASS — captura/importación read-only LightBurn/LaserGRBL/GRBL",
+    "calibration": "PASS — SVG/evaluación P0/PX/PY; aprobación física sigue requerida",
+    "scanner_profile": "PASS — Steren COM-597 y compatibilidad 1D heredada documentadas"
   },
   "qa": {
-    "pytest": "48/48 PASS",
+    "pytest": "55/55 PASS",
     "python_compileall": "PASS",
     "javascript_node_check": "PASS",
+    "documentation_contract": "PASS",
+    "ux_contract": "PASS",
     "compatibility_check": "PASS",
     "scan_simulation": "28/28 PASS",
     "inova_3x4_decode": "12/12 PASS",
@@ -24,22 +28,26 @@
     "configuration_importers": "4/4 PASS",
     "grbl_readonly_simulator": "PASS — only $I and $$",
     "benchmark": {
-      "records": 1200,
+      "records_input": 1200,
       "jig_capacity": 12,
-      "physical_loads": 100,
-      "individual_renders": 2500,
-      "seconds": 5.172,
-      "renders_per_second": 483.3,
-      "batch_vector_1200_seconds": 2.428,
-      "full_bed_png_300dpi_seconds": 5.371
+      "batches_for_1200": 100,
+      "individual_render_2500_seconds": 5.034,
+      "individual_render_2500_per_second": 496.6,
+      "process_peak_rss_delta_mib": 5.62,
+      "checksum": 16219920,
+      "batch_vector_render_1200_seconds": 2.407,
+      "batch_records_produced": 1200,
+      "last_full_bed_png_300dpi_seconds": 5.644,
+      "last_full_bed_png_bytes": 175034,
+      "status": "PASS"
     },
     "browser_e2e": "SKIP_POLICY — Chromium localhost blocked by runtime; API/HTML fallback PASS"
   },
   "platform_validation": {
     "executed_host": "Linux 6.18.35 / Python 3.13.5",
     "launchers_present": "Windows/Linux/macOS PASS",
-    "cross_platform_note": "Source/config/launcher compatibility is checked here; Windows/macOS execution requires real host or CI runner."
+    "cross_platform_note": "Source/config/launcher compatibility is checked here; Windows/macOS execution requires a real host or CI runner."
   },
-  "package_reextract_validation": "PASS — archive re-extracted in a clean directory; 165 packaged source files verified by SHA-256 manifest, compileall/JS syntax/48 tests/compatibility/28 scan simulations/12-slot decode/SVG/importer/GRBL/browser-fallback gates passed, and /api/health reported v0.6.0.",
+  "package_reextract_validation": "PASS — draft archive re-extracted in a clean directory; 170 packaged files verified by SHA-256 manifest; compileall, JavaScript syntax, 55/55 pytest and browser API/HTML fallback passed from the extracted package.",
   "physical_limits": "Laser/material/focus/contrast/jig repeatability are not digitally certified. Use the documented physical acceptance plan and shop-validated presets."
 }

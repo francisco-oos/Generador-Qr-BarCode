@@ -15,6 +15,7 @@ ElementKind = Literal[
 ]
 
 
+# WHY: Regla declarativa de captura por campo, incluido prefijo/sufijo manual y política para valores importados.
 class InputRule(BaseModel):
     """How one logical field behaves during manual capture vs. imported lists.
 
@@ -32,6 +33,7 @@ class InputRule(BaseModel):
     trim: bool = True
     description: str = ""
 
+    # WHY: Normaliza y valida el nombre del campo para impedir reglas ambiguas o claves peligrosas.
     @field_validator("field")
     @classmethod
     def input_field_safe(cls, value: str) -> str:
@@ -42,6 +44,7 @@ class InputRule(BaseModel):
         return value
 
 
+# WHY: Describe un objeto visual de plantilla con geometría, fuente de datos y propiedades específicas de cada simbología.
 class ElementSpec(BaseModel):
     kind: ElementKind
     x_mm: float = Field(ge=0)
@@ -57,6 +60,7 @@ class ElementSpec(BaseModel):
     stroke_mm: float = Field(default=0.25, gt=0)
     label: str | None = None
 
+    # WHY: Exige que un elemento de contenido tenga una fuente o literal coherente, evitando SVG vacíos difíciles de detectar.
     @model_validator(mode="after")
     def validate_content_source(self) -> "ElementSpec":
         if self.kind in {"text", "code128", "code39", "qr", "datamatrix"}:
@@ -65,6 +69,7 @@ class ElementSpec(BaseModel):
         return self
 
 
+# WHY: Contrato completo de una plantilla visual versionada y libre de dependencias de una grabadora concreta.
 class TemplateSpec(BaseModel):
     id: str
     name: str
@@ -80,6 +85,7 @@ class TemplateSpec(BaseModel):
     elements: list[ElementSpec]
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    # WHY: Restringe el identificador de plantilla a un formato estable apto para archivos, API y referencias históricas.
     @field_validator("id")
     @classmethod
     def id_safe(cls, value: str) -> str:
@@ -89,6 +95,7 @@ class TemplateSpec(BaseModel):
         return value
 
 
+# WHY: Límites de legibilidad y robustez reutilizables por distintas plantillas.
 class QualityProfile(BaseModel):
     id: str
     name: str
@@ -103,6 +110,7 @@ class QualityProfile(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+# WHY: Describe capacidades de una grabadora/controlador sin conceder permiso para operarla directamente.
 class MachineProfile(BaseModel):
     id: str
     name: str
@@ -119,6 +127,7 @@ class MachineProfile(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+# WHY: Describe simbologías y restricciones conocidas de un lector para validar compatibilidad de diseño.
 class ScannerProfile(BaseModel):
     id: str
     name: str
@@ -131,6 +140,7 @@ class ScannerProfile(BaseModel):
     notes: list[str] = Field(default_factory=list)
 
 
+# WHY: Geometría repetitiva de una base física usada para calcular posiciones.
 class JigGrid(BaseModel):
     rows: int = Field(ge=1, le=50)
     cols: int = Field(ge=1, le=50)
@@ -144,6 +154,7 @@ class JigGrid(BaseModel):
     slot_height_mm: float = Field(gt=0)
 
 
+# WHY: Define una base/jig, su capacidad y sus referencias de calibración.
 class JigProfile(BaseModel):
     id: str
     name: str
@@ -155,11 +166,13 @@ class JigProfile(BaseModel):
     disabled_slots: list[int] = Field(default_factory=list)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    # WHY: Calcula capacidad efectiva desde slots habilitados para que el batch no dependa de cifras duplicadas.
     @property
     def capacity(self) -> int:
         return self.grid.rows * self.grid.cols - len(set(self.disabled_slots))
 
 
+# WHY: Entrada para renderizar una marca individual con datos y modo de captura explícitos.
 class RenderRequest(BaseModel):
     template_id: str
     data: dict[str, str]
@@ -168,12 +181,14 @@ class RenderRequest(BaseModel):
     dpi: int | None = Field(default=None, ge=150, le=2400)
 
 
+# WHY: Vincula una fila de datos con una posición física y, opcionalmente, con la identidad observada por el operador.
 class BatchAssignment(BaseModel):
     slot_index: int = Field(ge=0)
     row_index: int = Field(ge=0)
     physical_id: str | None = None
 
 
+# WHY: Contrato de exportación de un lote colocado sobre jig con trazabilidad y confirmación física.
 class BatchExportRequest(BaseModel):
     template_id: str
     jig_id: str
@@ -184,6 +199,7 @@ class BatchExportRequest(BaseModel):
     output_dpi: int | None = Field(default=None, ge=150, le=2400)
 
 
+# WHY: Entrada controlada para crear numeraciones conocidas sin inferir seriales perdidos.
 class SeriesGenerateRequest(BaseModel):
     field: str = Field(default="value", min_length=1, max_length=64)
     prefix: str = Field(default="", max_length=64)
@@ -192,6 +208,7 @@ class SeriesGenerateRequest(BaseModel):
     width: int = Field(default=0, ge=0, le=32)
     suffix: str = Field(default="", max_length=64)
 
+    # WHY: Valida el campo de salida de una serie con las mismas reglas usadas por plantillas y CSV.
     @field_validator("field")
     @classmethod
     def field_safe(cls, value: str) -> str:
@@ -202,16 +219,19 @@ class SeriesGenerateRequest(BaseModel):
         return value
 
 
+# WHY: Entrada mínima para comparar lo esperado contra lo leído después del grabado.
 class ScanVerifyRequest(BaseModel):
     expected: str
     scanned: str
     normalize: bool = False
 
 
+# WHY: Envuelve una plantilla antes de persistirla y fuerza validación Pydantic completa.
 class TemplateSaveRequest(BaseModel):
     template: TemplateSpec
 
 
+# WHY: Permite previsualizar una plantilla todavía no guardada usando el mismo motor de producción.
 class TemplatePreviewRequest(BaseModel):
     """Render an unsaved visual-designer draft without persisting it."""
     template: TemplateSpec
@@ -221,6 +241,7 @@ class TemplatePreviewRequest(BaseModel):
     dpi: int | None = Field(default=None, ge=150, le=2400)
 
 
+# WHY: Solicita un SVG por registro para escenarios sin jig o composición posterior en el software de la máquina.
 class BulkTemplateExportRequest(BaseModel):
     """Export one SVG per row using a saved template.
 
@@ -232,10 +253,12 @@ class BulkTemplateExportRequest(BaseModel):
     filename_field: str | None = Field(default=None, max_length=64)
 
 
+# WHY: Envuelve un jig antes de persistirlo y reutiliza la validación del modelo.
 class JigSaveRequest(BaseModel):
     jig: JigProfile
 
 
+# WHY: Datos firmados que identifican edición, vigencia y capacidades de una licencia.
 class LicensePayload(BaseModel):
     license_id: str
     organization: str
@@ -248,16 +271,19 @@ class LicensePayload(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+# WHY: Entrada textual para interpretar un dump GRBL sin abrir un puerto serial.
 class GrblParseRequest(BaseModel):
     text: str = Field(min_length=1, max_length=200000)
 
 
+# WHY: Parámetros de una lectura GRBL segura y explícita.
 class GrblProbeRequest(BaseModel):
     port: str = Field(min_length=1, max_length=256)
     baud: int = Field(default=115200, ge=1200, le=1000000)
     machine_profile_id: str | None = None
 
 
+# WHY: Permite editar reglas de captura sin reemplazar manualmente todo el JSON de una plantilla.
 class TemplateInputRuleUpdateRequest(BaseModel):
     template_id: str
     field: str
@@ -269,20 +295,24 @@ class TemplateInputRuleUpdateRequest(BaseModel):
     uppercase: bool = False
 
 
+# WHY: Referencia un artefacto local previamente descubierto para importarlo de forma controlada.
 class LocalArtifactImportRequest(BaseModel):
     path: str = Field(min_length=1, max_length=4096)
     machine_profile_id: str | None = None
+# WHY: Coordenada medida de una referencia física del jig.
 class CalibrationPoint(BaseModel):
     name: str = Field(min_length=1, max_length=32)
     x_mm: float
     y_mm: float
 
 
+# WHY: Agrupa las mediciones necesarias para comparar geometría esperada y real.
 class CalibrationEvaluationRequest(BaseModel):
     jig_id: str
     measured: list[CalibrationPoint] = Field(min_length=2, max_length=10)
 
 
+# WHY: Captura un ajuste que el área ya probó, junto con contexto suficiente para no reutilizarlo fuera de su superficie/máquina.
 class ShopMaterialPresetRequest(BaseModel):
     """A material/surface setting already proven by the workshop.
 

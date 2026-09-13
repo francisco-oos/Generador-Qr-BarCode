@@ -18,6 +18,7 @@ from reportlab.graphics.barcode import createBarcodeDrawing
 from reportlab.lib.units import mm
 
 
+# WHY: Resultado geométrico reutilizable con SVG interno y dimensiones físicas explícitas.
 @dataclass(frozen=True)
 class SvgFragment:
     svg: str
@@ -25,11 +26,14 @@ class SvgFragment:
     height_mm: float
 
 
+# WHY: Permite formatear literales con campos ausentes sin romper todo el render durante diseño/preview.
 class SafeFormatDict(dict):
+    # WHY: Conserva el marcador faltante para hacerlo visible al diseñador en lugar de perder silenciosamente información.
     def __missing__(self, key: str) -> str:
         return "{" + key + "}"
 
 
+# WHY: Resuelve la fuente de un elemento desde datos o literal y aplica formato seguro de variables.
 def resolve_value(data: Mapping[str, str], source: str | None, literal: str | None = None) -> str:
     if literal is not None:
         return literal.format_map(SafeFormatDict({k: str(v) for k, v in data.items()}))
@@ -44,6 +48,7 @@ def resolve_value(data: Mapping[str, str], source: str | None, literal: str | No
     return ""
 
 
+# WHY: Extrae contenido y dimensiones de un SVG generado por librerías externas para integrarlo en nuestro documento físico.
 def _extract_svg_root(svg: str) -> str:
     idx = svg.find("<svg")
     if idx < 0:
@@ -51,6 +56,7 @@ def _extract_svg_root(svg: str) -> str:
     return svg[idx:]
 
 
+# WHY: Anida un SVG externo con transformación y tamaño controlados sin duplicar cabeceras de documento.
 def _nest_svg(svg: str, x_mm: float, y_mm: float, width_mm: float, height_mm: float) -> str:
     root = _extract_svg_root(svg)
     # ReportLab emits width/height on the root. Remove them before adding placement
@@ -68,6 +74,7 @@ def _nest_svg(svg: str, x_mm: float, y_mm: float, width_mm: float, height_mm: fl
 
 
 
+# WHY: Reposiciona un fragmento ya generado; se usa para alinear elementos sin regenerar la simbología.
 def reposition_fragment(fragment: SvgFragment, x_mm: float, y_mm: float) -> SvgFragment:
     """Reposition a nested SVG fragment without regenerating the barcode.
 
@@ -78,6 +85,7 @@ def reposition_fragment(fragment: SvgFragment, x_mm: float, y_mm: float) -> SvgF
                  f'<svg x="{x_mm:.4f}" y="{y_mm:.4f}"', fragment.svg, count=1)
     return SvgFragment(svg, fragment.width_mm, fragment.height_mm)
 
+# WHY: Genera Code 128 vectorial porque es el estándar inicial de nodos y mantiene lectura por escáner más texto visible.
 def code128_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
                      bar_height_mm: float, quiet_modules: int = 10) -> SvgFragment:
     if not value:
@@ -98,6 +106,7 @@ def code128_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
     return SvgFragment(_nest_svg(renderSVG.drawToString(drawing), x_mm, y_mm, width_mm, height_mm), width_mm, height_mm)
 
 
+# WHY: Ofrece Code 39 para equipos/procesos heredados sin introducir lógica específica en el diseñador.
 def code39_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
                     bar_height_mm: float, quiet_modules: int = 10) -> SvgFragment:
     if not value:
@@ -118,6 +127,7 @@ def code39_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
     return SvgFragment(_nest_svg(renderSVG.drawToString(drawing), x_mm, y_mm, width_mm, height_mm), width_mm, height_mm)
 
 
+# WHY: Genera QR vectorial con tamaño de módulo físico, apropiado para activos leídos con cámaras o lectores 2D.
 def qr_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
                 quiet_modules: int = 4, error_correction: str = "M") -> SvgFragment:
     if not value:
@@ -159,6 +169,7 @@ def qr_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
     return SvgFragment(f'<path d="{" ".join(commands)}" fill="#000"/>', width_mm, width_mm)
 
 
+# WHY: Genera Data Matrix compacto para piezas donde un QR resulte demasiado grande.
 def datamatrix_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
                         quiet_modules: int = 1) -> SvgFragment:
     if not value:
@@ -180,6 +191,7 @@ def datamatrix_fragment(value: str, x_mm: float, y_mm: float, module_mm: float,
     return SvgFragment(nested, total_mm, total_mm)
 
 
+# WHY: Genera texto vectorial posicionado en milímetros para conservar inspección visual junto al código.
 def text_fragment(value: str, x_mm: float, y_mm: float, font_size_mm: float,
                   width_mm: float | None = None, align: str = "center") -> SvgFragment:
     if align == "left":

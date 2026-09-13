@@ -1,4 +1,4 @@
-# Manual rápido — Server Oficina Marking Studio 0.6
+# Manual rápido — Server Oficina Marking Studio 0.6.1
 
 Pensado para un operador que conoce el equipo, pero no necesita saber programación, SVG o GRBL.
 
@@ -10,12 +10,16 @@ Pensado para un operador que conoce el equipo, pero no necesita saber programaci
 
 Abrir `http://127.0.0.1:8787` si el navegador no se abre solo.
 
-## 2. Usar una plantilla ya preparada
+## 2. Elegir una tarea
+
+Al abrir, **Inicio** ofrece cuatro accesos directos: marcar un equipo, procesar CSV/lote, crear una plantilla o verificar un grabado. En modo guiado puede trabajar sin entrar a Sistema/JSON.
+
+## 3. Usar una plantilla ya preparada
 
 1. Entre a **Generador**.
 2. Seleccione INOVA, Sercel, Teléfono u otra plantilla guardada.
 3. Escriba los datos solicitados.
-4. La vista previa cambia al actualizar los datos.
+4. La vista previa cambia automáticamente mientras escribe.
 5. Descargue SVG (preferido) o PNG.
 6. Abra el archivo en LightBurn, Sculpfun Space o el software configurado para la máquina.
 7. Use el preset ya validado por el área, verifique foco/origen y haga **Frame**.
@@ -23,14 +27,14 @@ Abrir `http://127.0.0.1:8787` si el navegador no se abre solo.
 
 Marking Studio genera el diseño; **no sustituye el software que controla la grabadora**.
 
-## 3. Crear una plantilla visual
+## 4. Crear una plantilla visual
 
 1. Abra **Estudio visual**.
 2. Elija una plantilla base y pulse **Duplicar**, o **Nueva en blanco**.
 3. Defina ancho/alto del área de marcado en milímetros.
 4. Agregue campos de datos, por ejemplo `serial`, `economico` o `asset_id`.
 5. Pulse un elemento: **Texto/serie, Texto fijo, Code 128, QR, Data Matrix**, etc.
-6. Arrástrelo con el mouse al lugar deseado.
+6. Arrástrelo con el mouse al lugar deseado. Si queda pequeño o superpuesto, selecciónelo desde **Capas / elementos** en el panel derecho.
 7. Selecciónelo y ajuste X/Y, medidas, fuente, módulo y campo origen.
 8. Observe **Vista real SVG**. Ésa usa el mismo renderizador de la producción.
 9. Elija la **identidad principal** para conciliación física/nombre de archivo.
@@ -38,7 +42,7 @@ Marking Studio genera el diseño; **no sustituye el software que controla la gra
 
 La nueva plantilla aparece en Generador y Lotes/CSV sin modificar código.
 
-## 4. Prefijo al capturar a mano
+## 5. Prefijo al capturar a mano
 
 En Estudio visual, seleccione el campo y configure una regla. Ejemplo:
 
@@ -48,7 +52,7 @@ En Estudio visual, seleccione el campo y configure una regla. Ejemplo:
 
 Por defecto, un CSV con `Q00525499` se usa **tal cual**, para evitar `Q00Q00525499`.
 
-## 5. Cargar CSV o una lista de puros números
+## 6. Cargar CSV o una lista de puros números
 
 En **Lotes / CSV** puede cargar:
 
@@ -70,7 +74,7 @@ Si sólo existe una columna, el programa la propone automáticamente para los ca
 
 La vista previa del primer registro cambia en cuanto modifica el mapeo.
 
-## 6. Trabajar con un jig/base
+## 7. Trabajar con un jig/base
 
 1. Cargue datos.
 2. Elija plantilla y jig.
@@ -83,30 +87,30 @@ La vista previa del primer registro cambia en cuanto modifica el mapeo.
 9. Nunca grabe `preview/preview_DO_NOT_ENGRAVE.svg`.
 10. Frame → grabar → verificar.
 
-## 7. Generar muchos SVG sin jig
+## 8. Generar muchos SVG sin jig
 
 Después de cargar/mapear el CSV, pulse **Generar SVG individuales del CSV**. El ZIP contendrá un SVG por fila más manifiestos. Es útil si después el área quiere acomodarlos manualmente en LightBurn/Sculpfun Space.
 
 La prueba de software ejercita 1 000 y 5 000 SVG individuales.
 
-## 8. Lectores
+## 9. Lectores
 
 - **Steren COM-597**: puede verificar Code 128, QR y Data Matrix según el perfil documentado del proyecto.
 - **LS2208** (si todavía existe alguna estación): lector 1D; usar Code 128, no QR.
 
 El código correcto es el que el lector real lee repetidamente después del grabado, no sólo el que se ve bien en pantalla.
 
-## 9. Materiales y teléfonos
+## 10. Materiales y teléfonos
 
 Primero reutilice el ajuste que el área ya sabe que funciona para la misma máquina/superficie. No existe un preset universal para “plástico” o “Xiaomi”. Modelo y zona importan.
 
 Para una superficie nueva: material identificado → prueba conservadora → contraste legible → verificación con lector → guardar preset local.
 
-## 10. Calibrar posición
+## 11. Calibrar posición
 
 Use **Calibración** con material de sacrificio. Genere P0/PX/PY, haga Frame, mida y compare. No use un activo bueno para descubrir offsets.
 
-## 11. Regla final
+## 12. Regla final
 
 Un trabajo sólo se libera cuando se cumplen las tres:
 

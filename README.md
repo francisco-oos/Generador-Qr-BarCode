@@ -1,4 +1,4 @@
-# Server Oficina Marking Studio v0.6.0
+# Server Oficina Marking Studio v0.6.1
 
 Generador local y auditable de **marcado físico de activos** para Server Oficina. Convierte identidades provenientes de captura manual, CSV o futura BD en texto + Code 128/QR/Data Matrix, las posiciona sobre jigs/bases, exige conciliación física y entrega archivos a Sculpfun Space/LightBurn/LaserGRBL sin controlar directamente el láser.
 
@@ -8,7 +8,12 @@ Un nodo sin etiqueta puede seguir siendo reconocible si se le graba `Q00525499`,
 
 El sufijo INOVA `-xx` no se inventa. Se conserva como dato adicional cuando exista, pero el estándar operativo inicial usa el identificador realmente utilizado por la operación.
 
-## Novedades v0.6
+## Novedades v0.6.1
+
+- navegación por tareas con portada de acciones frecuentes y separación Operación / Diseño / Control;
+- modo guiado oculta el área técnica Sistema;
+- preview individual en vivo, stepper de lotes y lista de capas en el diseñador;
+- comentarios `WHY:` y guía de revisión para explicar por qué existe cada responsabilidad antes de modificarla;
 
 - **Estudio visual de marcado**: crea, duplica y edita plantillas con clic o arrastrando directamente texto/serie, Code 128, Code 39, QR, Data Matrix, rectángulos y líneas; la vista real se recalcula con el mismo motor de producción.
 - CSV flexible: encabezados automáticos/forzados/sin encabezado, listas de una sola columna y mapeo de campos sin depender de nombres rígidos.
@@ -120,6 +125,9 @@ Empiece por:
 - `docs/OPERATING_STANDARD.md`;
 - `docs/CSV_AND_TEMPLATE_GUIDE.md`;
 - `docs/VISUAL_TEMPLATE_STUDIO.md` — diseñador visual, campos y exportación masiva;
+- `docs/UX_AND_WORKFLOW.md` — decisiones de interfaz y flujo para modo guiado/experto;
+- `docs/CODE_REVIEW_GUIDE.md` — inventario de funciones/clases y motivo de cada responsabilidad;
+- `docs/MAINTAINER_GUIDE.md` — invariantes y procedimiento para extender sin hardcodeo;
 - `docs/COMPATIBILITY_MATRIX.md`;
 - `docs/SERVER_OFICINA_INTEGRATION.md`;
 - `docs/LICENSE_ARCHITECTURE.md`;

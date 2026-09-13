@@ -1,7 +1,7 @@
 # Interoperabilidad con SCULPFUN, LightBurn, Sculpfun Space, LaserGRBL y futuras máquinas
 
 Fecha de revisión: 2026-09-12  
-Versión del proyecto: 0.6.0
+Versión del proyecto: 0.6.1
 
 ## 1. Principio de arquitectura
 

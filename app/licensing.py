@@ -21,25 +21,32 @@ from .models import LicensePayload
 ROOT = Path(__file__).resolve().parent.parent
 
 
+# WHY: Error de dominio para distinguir una licencia inválida de fallos técnicos generales.
 class LicenseError(RuntimeError):
     pass
 
 
+# WHY: Contrato de proveedor de licencia; existe para que el resto del sistema no dependa del origen de autorización.
 class LicenseProvider(ABC):
+    # WHY: Devuelve un estado uniforme de licencia que la UI y la API pueden consumir sin conocer el proveedor concreto.
     @abstractmethod
     def status(self) -> dict:
         raise NotImplementedError
 
 
+# WHY: Valida una licencia local firmada, útil durante el piloto antes de conectar Server Oficina.
 class StandaloneFileLicenseProvider(LicenseProvider):
+    # WHY: Recibe rutas de licencia y clave pública para hacer el proveedor testeable y portable entre sistemas operativos.
     def __init__(self, license_path: Path | None = None, public_key_path: Path | None = None):
         self.license_path = license_path or ROOT / "license" / "license.local.json"
         self.public_key_path = public_key_path or ROOT / "license" / "public_key.pem"
 
+    # WHY: Serializa el payload de forma determinista; la firma sólo es verificable si emisor y receptor firman exactamente los mismos bytes.
     @staticmethod
     def _canonical(payload: dict) -> bytes:
         return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
+    # WHY: Verifica firma, vigencia y contenido y traduce el resultado al contrato común de licencia.
     def status(self) -> dict:
         if not self.license_path.exists() or not self.public_key_path.exists():
             return {"valid": False, "reason": "license_or_public_key_missing", "mode": "standalone"}
@@ -70,6 +77,7 @@ class StandaloneFileLicenseProvider(LicenseProvider):
             return {"valid": False, "reason": f"verification_failed:{type(exc).__name__}", "mode": "standalone"}
 
 
+# WHY: Punto de extensión para que una futura instalación consulte autorización directamente al servidor de oficina.
 class ServerOficinaLicenseProvider(LicenseProvider):
     """Future provider boundary.
 
@@ -78,6 +86,7 @@ class ServerOficinaLicenseProvider(LicenseProvider):
     return the same status shape as the standalone provider without changing UI/core logic.
     """
 
+    # WHY: Expone explícitamente que el proveedor remoto aún no está conectado, evitando aparentar una autorización inexistente.
     def status(self) -> dict:
         return {
             "valid": False,
@@ -87,6 +96,7 @@ class ServerOficinaLicenseProvider(LicenseProvider):
         }
 
 
+# WHY: Selecciona el proveedor configurado en un solo lugar para que cambiar la estrategia de licencia no afecte a las rutas.
 def get_license_provider() -> LicenseProvider:
     mode = os.getenv("MARKING_STUDIO_LICENSE_MODE", "standalone").strip().lower()
     if mode == "server_oficina":

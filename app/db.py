@@ -16,10 +16,12 @@ ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "data" / "marking_studio.sqlite3"
 
 
+# WHY: Genera timestamps UTC homogéneos para comparar eventos entre estaciones y futura sincronización.
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# WHY: Abre SQLite con filas por nombre y una única ubicación configurable para facilitar pruebas y migración.
 def connect() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB_PATH)
@@ -29,6 +31,7 @@ def connect() -> sqlite3.Connection:
     return con
 
 
+# WHY: Crea el esquema idempotente al arrancar para que una estación nueva pueda operar sin pasos manuales ocultos.
 def init_db() -> None:
     with connect() as con:
         con.executescript(
@@ -84,6 +87,7 @@ def init_db() -> None:
         )
 
 
+# WHY: Registra trabajo y marcas antes/después de exportar para conservar quién, qué plantilla y qué posición se usó.
 def record_job(template_id: str, jig_id: str | None, machine_id: str | None,
                manifest: list[dict], rows: list[dict[str, str]], metadata: dict) -> str:
     job_id = str(uuid.uuid4())
@@ -109,6 +113,7 @@ def record_job(template_id: str, jig_id: str | None, machine_id: str | None,
     return job_id
 
 
+# WHY: Marca como verificado el registro coincidente después de un escaneo exitoso, sin reescribir su identidad histórica.
 def verify_mark(asset_key: str, scanned: str) -> dict:
     with connect() as con:
         row = con.execute(
@@ -123,6 +128,7 @@ def verify_mark(asset_key: str, scanned: str) -> dict:
         return {"updated": True, "mark_id": row["id"], "job_id": row["job_id"]}
 
 
+# WHY: Devuelve eventos recientes para auditoría operativa y diagnóstico.
 def history(limit: int = 100) -> list[dict]:
     with connect() as con:
         rows = con.execute(
@@ -137,6 +143,7 @@ def history(limit: int = 100) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+# WHY: Guarda metadatos/hash de una configuración importada para demostrar su procedencia sin modificar el original.
 def record_machine_capture(source_type: str, source_name: str, sha256: str, summary: dict, settings: dict,
                            material_presets: list[dict], warnings: list[str], machine_profile_id: str | None = None) -> dict:
     """Persist a read-only snapshot imported from LightBurn/GRBL.
@@ -166,6 +173,7 @@ def record_machine_capture(source_type: str, source_name: str, sha256: str, summ
     return {"capture_id": capture_id, "material_preset_ids": preset_ids}
 
 
+# WHY: Lista capturas de configuración para que la UI muestre de dónde provienen los ajustes.
 def machine_captures(limit: int = 100) -> list[dict]:
     with connect() as con:
         rows = con.execute(
@@ -181,6 +189,7 @@ def machine_captures(limit: int = 100) -> list[dict]:
         return result
 
 
+# WHY: Lista presets capturados/importados que pueden asociarse a un trabajo.
 def material_presets(limit: int = 1000) -> list[dict]:
     with connect() as con:
         rows = con.execute(
@@ -195,6 +204,7 @@ def material_presets(limit: int = 1000) -> list[dict]:
         return result
 
 
+# WHY: Recupera un preset concreto para incluirlo de manera estable en manifiestos.
 def material_preset_by_id(preset_id: int) -> dict | None:
     with connect() as con:
         r=con.execute(
@@ -208,6 +218,7 @@ def material_preset_by_id(preset_id: int) -> dict | None:
         return item
 
 
+# WHY: Guarda un ajuste manual del taller con estado validado/borrador y contexto de máquina/superficie.
 def record_shop_material_preset(*, name: str, machine_profile_id: str, material: str,
                                 surface_or_model: str, operation: str, speed_mm_min: float,
                                 power_percent: float, passes: int, interval_mm: float | None,

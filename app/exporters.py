@@ -9,6 +9,7 @@ from reportlab.graphics import renderPM
 from svglib.svglib import svg2rlg
 
 
+# WHY: Rasteriza una marca sólo como alternativa de interoperabilidad; SVG sigue siendo la geometría autoritativa.
 def svg_to_png(svg: str, width_mm: float, height_mm: float, dpi: int = 600) -> bytes:
     """Rasterize our generated SVG without depending on an external browser.
 
@@ -30,6 +31,7 @@ def svg_to_png(svg: str, width_mm: float, height_mm: float, dpi: int = 600) -> b
     return renderPM.drawToString(drawing, fmt="PNG", dpi=dpi, bg=0xFFFFFF)
 
 
+# WHY: Genera un manifiesto simple interoperable con Excel/otras herramientas y útil para revisión humana.
 def manifest_csv_bytes(manifest: list[dict]) -> bytes:
     if not manifest:
         return b""
@@ -40,6 +42,7 @@ def manifest_csv_bytes(manifest: list[dict]) -> bytes:
     return out.getvalue().encode("utf-8-sig")
 
 
+# WHY: Empaqueta producción, preview separado y manifiestos para que una entrega de lote sea autocontenida y auditable.
 def build_batch_zip(svg: str, preview_svg: str, png: bytes, manifest: list[dict], metadata: dict, raster_dpi: int = 300) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as z:
@@ -63,6 +66,7 @@ def build_batch_zip(svg: str, preview_svg: str, png: bytes, manifest: list[dict]
     return buf.getvalue()
 
 
+# WHY: Empaqueta miles de SVG individuales con manifiesto sin requerir un jig físico.
 def build_bulk_template_zip(items: list[dict], metadata: dict) -> bytes:
     """Package one SVG per data row plus a manifest for downstream machine software.
 

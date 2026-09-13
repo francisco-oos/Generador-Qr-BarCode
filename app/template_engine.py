@@ -21,6 +21,7 @@ from .barcode_engine import (
 from .models import QualityProfile, TemplateSpec
 
 
+# WHY: Resultado autoritativo de una plantilla, con SVG, dimensiones, datos normalizados y advertencias.
 @dataclass
 class RenderedMark:
     svg: str
@@ -30,6 +31,7 @@ class RenderedMark:
     resolved: dict[str, str] = field(default_factory=dict)
 
 
+# WHY: Aplica prefijos/sufijos sólo según modo de captura, preservando CSV importado cuando la plantilla así lo indica.
 def apply_input_rules(template: TemplateSpec, data: Mapping[str, str], capture_mode: str = "manual") -> dict[str, str]:
     """Normalize template input without corrupting imported identifiers.
 
@@ -58,6 +60,7 @@ def apply_input_rules(template: TemplateSpec, data: Mapping[str, str], capture_m
     return out
 
 
+# WHY: Renderiza todos los elementos con una sola implementación compartida por preview, individual, batch y exportación masiva.
 def render_template(template: TemplateSpec, quality: QualityProfile, data: Mapping[str, str]) -> RenderedMark:
     parts: list[str] = []
     warnings: list[str] = []

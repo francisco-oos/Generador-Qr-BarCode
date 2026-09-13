@@ -31,6 +31,10 @@ La salida sigue siendo SVG/PNG. Marking Studio no sustituye LightBurn, Sculpfun 
 
 El borde azul del editor es sólo una ayuda visual y no se exporta.
 
+## Mejora de selección v0.6.1
+
+El panel derecho incluye **Capas / elementos**. Sirve como segunda vía de selección cuando un QR, línea o elemento solapado resulte difícil de clicar en el lienzo. La capa seleccionada y el objeto del canvas representan la misma entrada de `elements`; no existe una copia visual separada.
+
 ## CSV y listas simples
 
 Un archivo puede contener muchas columnas o solamente una lista de identificadores. Al importar:
