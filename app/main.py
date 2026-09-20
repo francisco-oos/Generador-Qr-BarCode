@@ -84,9 +84,9 @@ from .material_catalog import phone_reference, search_material_reference
 from .code_quality import assess_template_codes
 from .marking_coupon import render_marking_coupon
 from .laser_design_studio import (
-    PapercutRequest, HalftoneRequest, StencilRequest, BridgeCouponRequest,
+    PapercutRequest, HalftoneRequest, StencilRequest, BridgeCouponRequest, MaterialPassportRequest,
     capabilities as laser_design_capabilities,
-    generate_papercut, generate_halftone, generate_stencil, generate_bridge_coupon,
+    generate_papercut, generate_halftone, generate_stencil, generate_bridge_coupon, generate_material_passport,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -194,6 +194,11 @@ def laser_design_stencil(req: StencilRequest) -> dict[str, Any]:
 @app.post("/api/laser-design/openai-lab/bridge-coupon")
 def laser_design_bridge_coupon(req: BridgeCouponRequest) -> dict[str, Any]:
     return _laser_design_call(generate_bridge_coupon, req)
+
+
+@app.post("/api/laser-design/openai-lab/material-passport")
+def laser_design_material_passport(req: MaterialPassportRequest) -> dict[str, Any]:
+    return _laser_design_call(generate_material_passport, req)
 
 
 # WHY: Entrega plantillas, jigs, máquinas, lectores y calidad desde configuración, evitando catálogos duplicados en JavaScript.
