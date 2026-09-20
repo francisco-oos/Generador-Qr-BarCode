@@ -41,6 +41,16 @@ def api_static_fallback() -> dict:
         result["laser_design_capabilities"] = caps.status_code == 200 and caps.json().get("machine_control") is False
         papercut = client.post("/api/laser-design/papercut", json={"width_mm": 80, "height_mm": 100, "rows": 4, "cols": 4, "seed": 42})
         result["laser_design_papercut"] = papercut.status_code == 200 and papercut.json().get("preflight", {}).get("component_count") == 1
+        passport = client.post("/api/laser-design/openai-lab/material-passport", json={
+            "bridge_widths_mm": [0.8, 1.2],
+            "hole_diameters_mm": [1.0, 2.0],
+            "gap_widths_mm": [0.8, 1.2],
+        })
+        result["material_dna_passport"] = (
+            passport.status_code == 200
+            and str(passport.json().get("passport_id", "")).startswith("MDNA-")
+            and passport.json().get("machine_control") is False
+        )
         catalog = client.get("/api/catalog")
         result["catalog"] = catalog.status_code == 200 and len(catalog.json().get("templates", [])) >= 5
         calib = client.get("/api/calibration/jig/inova_tray_3x4_estimate")
@@ -134,7 +144,12 @@ def main() -> None:
             if "ERR_BLOCKED_BY_ADMINISTRATOR" in message:
                 browser_status = "SKIP_POLICY"
                 results["browser_skip_reason"] = "El runtime bloquea navegación Chromium a localhost por política; se ejecutó fallback API/HTML."
-            elif "Executable doesn't exist" in message or "playwright" in message.lower() and "not found" in message.lower():
+            elif (
+                (isinstance(exc, ModuleNotFoundError) and getattr(exc, "name", "") == "playwright")
+                or "No module named 'playwright'" in message
+                or "Executable doesn't exist" in message
+                or ("playwright" in message.lower() and "not found" in message.lower())
+            ):
                 browser_status = "SKIP_UNAVAILABLE"
                 results["browser_skip_reason"] = "Playwright/Chromium no disponible en el host; se ejecutó fallback API/HTML."
             else:
