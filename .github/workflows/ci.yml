@@ -21,9 +21,9 @@ jobs:
         with:
           node-version: '22'
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev pkg-config libzbar0
       - if: runner.os == 'macOS'
-        run: brew install cairo pkg-config
+        run: brew install cairo pkg-config zbar
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements-qa.txt
       - run: python -m compileall -q app scripts tests
