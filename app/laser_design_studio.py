@@ -19,6 +19,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import hashlib
 import math
 import random
 from dataclasses import dataclass
@@ -120,6 +121,30 @@ class BridgeCouponRequest(BaseModel):
         if any(v < 0.2 or v > 20 for v in out):
             raise ValueError("Cada ancho debe estar entre 0.2 y 20 mm")
         return out
+
+
+class MaterialPassportRequest(BaseModel):
+    """Sacrificial proof sheet used to measure physical geometry limits.
+
+    The sheet intentionally spans features that may fail. It records no laser
+    power/speed and does not call the machine; the operator uses an already
+    established process and records which features survive.
+    """
+    bridge_widths_mm: list[float] = Field(default_factory=lambda: [0.5, 0.7, 0.9, 1.2, 1.5, 2.0, 2.5])
+    hole_diameters_mm: list[float] = Field(default_factory=lambda: [0.5, 0.8, 1.0, 1.5, 2.0, 3.0, 4.0])
+    gap_widths_mm: list[float] = Field(default_factory=lambda: [0.5, 0.7, 0.9, 1.2, 1.5, 2.0, 2.5])
+    row_height_mm: float = Field(default=10.0, ge=6.0, le=30.0)
+    feature_length_mm: float = Field(default=22.0, ge=8.0, le=60.0)
+
+    @field_validator("bridge_widths_mm", "hole_diameters_mm", "gap_widths_mm")
+    @classmethod
+    def passport_values_valid(cls, value: list[float]) -> list[float]:
+        if not value or len(value) > 20:
+            raise ValueError("Cada serie debe contener entre 1 y 20 medidas")
+        values = [round(float(v), 3) for v in value]
+        if any(v < 0.2 or v > 30 for v in values):
+            raise ValueError("Las medidas del pasaporte deben estar entre 0.2 y 30 mm")
+        return values
 
 
 @dataclass(frozen=True)
@@ -595,6 +620,107 @@ def generate_bridge_coupon(req: BridgeCouponRequest) -> dict[str, Any]:
     return result
 
 
+
+def generate_material_passport(req: MaterialPassportRequest) -> dict[str, Any]:
+    """Generate a multi-constraint sacrificial sheet: bridges, holes and gaps.
+
+    This is an OpenAI Lab synthesis: one physical coupon characterises three
+    geometry limits used by all generators. The output also carries a stable
+    fingerprint so measured results can later become a material constraint
+    profile without coupling that profile to a specific design.
+    """
+    margin = 8.0
+    section_gap = 7.0
+    widths = [float(v) for v in req.bridge_widths_mm]
+    holes_d = [float(v) for v in req.hole_diameters_mm]
+    gaps = [float(v) for v in req.gap_widths_mm]
+    rows = len(widths) + len(holes_d) + len(gaps)
+    width = 170.0
+    height = margin * 2 + rows * req.row_height_mm + section_gap * 2
+    outer = box(0, 0, width, height)
+    cutouts: list[Polygon] = []
+    guides: list[Polygon] = []
+    measurement_rows: list[dict[str, Any]] = []
+    y = margin
+
+    # Zone A: two windows leave a central ligament of known width.
+    for i, bridge in enumerate(widths, start=1):
+        cy = y + req.row_height_mm / 2
+        h = max(2.0, req.row_height_mm - 2.5)
+        cx = width / 2
+        left = box(margin, cy-h/2, cx-bridge/2, cy+h/2)
+        right = box(cx+bridge/2, cy-h/2, width-margin, cy+h/2)
+        cutouts.extend([left, right])
+        guides.append(box(2.0, cy-0.12, 5.0, cy+0.12))
+        measurement_rows.append({"zone":"bridge", "index":i, "target_mm":bridge, "record":"survived_cleanly"})
+        y += req.row_height_mm
+
+    y += section_gap
+    # Zone B: minimum reproducible holes. Three repetitions make one accidental
+    # survivor less likely to be mistaken for a reliable process capability.
+    for i, diameter in enumerate(holes_d, start=1):
+        cy = y + req.row_height_mm / 2
+        xs = (width*0.36, width*0.50, width*0.64)
+        for cx in xs:
+            cutouts.append(Point(cx, cy).buffer(diameter/2, quad_segs=16))
+        guides.append(box(2.0, cy-0.12, 5.0, cy+0.12))
+        measurement_rows.append({"zone":"hole", "index":i, "target_mm":diameter, "repetitions":3, "record":"all_three_open_cleanly"})
+        y += req.row_height_mm
+
+    y += section_gap
+    # Zone C: two windows separated by a known web/gap. This characterises
+    # adjacent-cut survival independently from the central bridge ladder.
+    for i, gap in enumerate(gaps, start=1):
+        cy = y + req.row_height_mm / 2
+        h = max(2.0, req.row_height_mm - 2.5)
+        cx = width / 2
+        fw = req.feature_length_mm
+        cutouts.append(box(cx-gap/2-fw, cy-h/2, cx-gap/2, cy+h/2))
+        cutouts.append(box(cx+gap/2, cy-h/2, cx+gap/2+fw, cy+h/2))
+        guides.append(box(2.0, cy-0.12, 5.0, cy+0.12))
+        measurement_rows.append({"zone":"gap", "index":i, "target_mm":gap, "record":"web_survived_cleanly"})
+        y += req.row_height_mm
+
+    recipe = {
+        "engine": "openai-material-dna-proof-sheet",
+        **req.model_dump(),
+        "cut_outer": True,
+        "purpose": "physical constraint characterization",
+    }
+    fingerprint_source = json.dumps(recipe, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    passport_id = "MDNA-" + hashlib.sha256(fingerprint_source).hexdigest()[:12].upper()
+    recipe["passport_id"] = passport_id
+    artifact = CutArtifact(
+        outer=outer, cutouts=tuple(cutouts), width_mm=width, height_mm=height,
+        kind="material-passport", recipe=recipe, guides=tuple(guides),
+        warnings=(
+            "Hoja de caracterización experimental: algunas características están diseñadas para fallar; use material de sacrificio.",
+            "No deduce ni recomienda potencia/velocidad. Mide límites geométricos del proceso que usted ya validó.",
+        ),
+    )
+    # Use the smallest requested web only as a neutral digital reference. This
+    # sheet is intentionally exploratory, so FAIL/WARN is not a rejection.
+    digital_target = min(widths + gaps)
+    result = artifact_response(artifact, digital_target)
+    result["passport_id"] = passport_id
+    result["measurement_schema"] = {
+        "rows": measurement_rows,
+        "record_after_cut": {
+            "minimum_reliable_bridge_mm": None,
+            "minimum_reliable_hole_mm": None,
+            "minimum_reliable_gap_mm": None,
+            "material_label": "",
+            "thickness_mm": None,
+            "machine_profile_id": "",
+            "preset_reference": "",
+            "notes": "",
+        },
+        "rule": "Use el menor valor repetible que salga íntegro; agregue margen antes de convertirlo en límite productivo.",
+    }
+    result["interpretation"] = "CHARACTERIZATION_SHEET_NOT_PRODUCTION_PREFLIGHT"
+    return result
+
+
 def capabilities() -> dict[str, Any]:
     return {
         "version": "0.9.0-experimental",
@@ -613,6 +739,8 @@ def capabilities() -> dict[str, Any]:
             "minimum_safe_scale": True,
             "adaptive_bridge_planner": True,
             "bridge_ladder_coupon": True,
+            "material_dna_passport": True,
+            "self_guarding_geometry": True,
             "reproducible_design_genome": True,
         },
     }
