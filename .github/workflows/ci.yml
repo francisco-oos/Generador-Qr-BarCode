@@ -38,3 +38,4 @@ jobs:
       - run: node --check app/static/app.js
       - run: node --check app/static/laser_design.js
       - run: python scripts/compatibility_check.py
+      - run: python scripts/qa_browser_smoke.py
