@@ -110,3 +110,18 @@ def test_frontend_id_helper_is_never_called_with_css_selector():
     helper_args = re.findall(r"\$\(['\"]([^'\"]+)['\"]\)", js)
     invalid = [value for value in helper_args if value.startswith(('.', '#', '[', ':'))]
     assert invalid == [], f"getElementById helper received CSS selectors: {invalid}"
+
+
+def test_laser_design_routes_are_registered_in_fastapi():
+    from app.main import app
+    paths = {route.path for route in app.routes}
+    expected = {
+        "/laser-design",
+        "/api/laser-design/capabilities",
+        "/api/laser-design/papercut",
+        "/api/laser-design/halftone",
+        "/api/laser-design/stencil",
+        "/api/laser-design/openai-lab/bridge-coupon",
+        "/api/laser-design/openai-lab/material-passport",
+    }
+    assert expected <= paths, sorted(expected - paths)
