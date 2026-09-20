@@ -317,7 +317,7 @@ def artifact_response(artifact: CutArtifact, min_bridge_mm: float) -> dict[str, 
         "recipe": artifact.recipe,
         "preflight": preflight,
         "warnings": warnings,
-        "operation_layers": ["cut", "guide" if artifact.guides else None],
+        "operation_layers": ["cut"] + (["guide"] if artifact.guides else []),
         "machine_control": False,
     }
 
