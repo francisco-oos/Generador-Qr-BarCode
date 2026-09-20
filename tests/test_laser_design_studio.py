@@ -2,9 +2,9 @@ from __future__ import annotations
 import base64, io
 from PIL import Image, ImageDraw
 from app.laser_design_studio import (
-    PapercutRequest, HalftoneRequest, StencilRequest, BridgeCouponRequest,
+    PapercutRequest, HalftoneRequest, StencilRequest, BridgeCouponRequest, MaterialPassportRequest,
     generate_papercut, generate_halftone, generate_stencil,
-    generate_bridge_coupon, capabilities,
+    generate_bridge_coupon, generate_material_passport, capabilities,
 )
 
 
@@ -82,3 +82,21 @@ def test_laser_design_frontend_contract_has_no_dangling_ids_or_machine_commands(
     for endpoint in ('/api/laser-design/papercut','/api/laser-design/halftone','/api/laser-design/stencil','/api/laser-design/openai-lab/bridge-coupon'):
         assert endpoint in js
     assert 'G0 ' not in js and 'G1 ' not in js and 'M3 ' not in js and 'M4 ' not in js
+
+
+def test_material_dna_passport_is_deterministic_and_machine_independent():
+    req = MaterialPassportRequest(
+        bridge_widths_mm=[0.6, 1.0, 1.5],
+        hole_diameters_mm=[0.8, 1.2, 2.0],
+        gap_widths_mm=[0.6, 1.0, 1.5],
+    )
+    a = generate_material_passport(req)
+    b = generate_material_passport(req)
+    assert a["passport_id"] == b["passport_id"]
+    assert a["svg"] == b["svg"]
+    assert a["machine_control"] is False
+    assert a["interpretation"] == "CHARACTERIZATION_SHEET_NOT_PRODUCTION_PREFLIGHT"
+    zones = {row["zone"] for row in a["measurement_schema"]["rows"]}
+    assert zones == {"bridge", "hole", "gap"}
+    assert "power" not in str(a["measurement_schema"]).lower()
+    assert "G0 " not in a["svg"] and "M3 " not in a["svg"]
