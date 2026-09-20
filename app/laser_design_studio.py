@@ -313,3 +313,108 @@ def artifact_response(artifact: CutArtifact, min_bridge_mm: float) -> dict[str, 
         "width_mm": artifact.width_mm,
         "height_mm": artifact.height_mm,
         "svg": artifact_svg(artifact, preview=False),
+        "preview_svg": artifact_svg(artifact, preview=True),
+        "recipe": artifact.recipe,
+        "preflight": preflight,
+        "warnings": warnings,
+        "operation_layers": ["cut", "guide" if artifact.guides else None],
+        "machine_control": False,
+    }
+
+
+def generate_papercut(req: PapercutRequest) -> dict[str, Any]:
+    outer = box(0, 0, req.width_mm, req.height_mm)
+    rng = random.Random(req.seed)
+    inner_w = req.width_mm - 2 * req.margin_mm
+    inner_h = req.height_mm - 2 * req.margin_mm
+    cell_w = inner_w / req.cols
+    cell_h = inner_h / req.rows
+    max_radius = max(0.1, min(cell_w, cell_h) * req.density * 0.42)
+    # Preserve a deliberate web between neighbouring cells. This is a design-time
+    # guard, not a substitute for preflight after geometry is generated.
+    max_radius = min(max_radius, max(0.1, (min(cell_w, cell_h) - req.min_bridge_mm) / 2.0))
+    cutouts: list[Polygon] = []
+    half_cols = (req.cols + 1) // 2 if req.symmetry == "mirror" else req.cols
+    for row in range(req.rows):
+        for col in range(half_cols):
+            cx = req.margin_mm + (col + 0.5) * cell_w
+            cy = req.margin_mm + (row + 0.5) * cell_h
+            radius = max_radius * rng.uniform(0.70, 1.0)
+            g = _motif_geometry(req.motif, cx, cy, radius)
+            # Alternate angle so the pattern is less mechanically repetitive while
+            # still exactly reproducible from the seed.
+            g = affinity.rotate(g, (row + col) % 2 * 45.0, origin=(cx, cy))
+            if outer.contains(g):
+                cutouts.append(g)
+            if req.symmetry == "mirror":
+                mirror_col = req.cols - 1 - col
+                if mirror_col != col:
+                    mcx = req.margin_mm + (mirror_col + 0.5) * cell_w
+                    mirrored = affinity.scale(g, xfact=-1, yfact=1, origin=(req.width_mm / 2.0, req.height_mm / 2.0))
+                    # Numeric symmetry around the page centre can drift from the exact
+                    # mirrored cell centre if cols are even, so translate to the target.
+                    dx = mcx - mirrored.centroid.x
+                    mirrored = affinity.translate(mirrored, xoff=dx, yoff=0)
+                    if outer.contains(mirrored):
+                        cutouts.append(mirrored)
+    recipe = req.model_dump()
+    recipe.update({"engine": "papercut-parametric", "design_genome": f"papercut:{req.seed}:{req.rows}x{req.cols}:{req.motif}:{req.symmetry}"})
+    artifact = CutArtifact(outer=outer, cutouts=tuple(cutouts), width_mm=req.width_mm, height_mm=req.height_mm, kind="papercut", recipe=recipe)
+    return artifact_response(artifact, req.min_bridge_mm)
+
+
+def _fit_image_cover(gray: Image.Image, cols: int, rows: int) -> Image.Image:
+    # Fit rather than stretch: crop the centre after preserving source aspect ratio.
+    target_ratio = cols / rows
+    src_ratio = gray.width / gray.height
+    if src_ratio > target_ratio:
+        new_w = max(1, round(gray.height * target_ratio))
+        left = max(0, (gray.width - new_w) // 2)
+        gray = gray.crop((left, 0, left + new_w, gray.height))
+    elif src_ratio < target_ratio:
+        new_h = max(1, round(gray.width / target_ratio))
+        top = max(0, (gray.height - new_h) // 2)
+        gray = gray.crop((0, top, gray.width, top + new_h))
+    return gray.resize((cols, rows), Image.Resampling.LANCZOS)
+
+
+def generate_halftone(req: HalftoneRequest) -> dict[str, Any]:
+    gray = _decode_raster(req.image_data_uri)
+    inner_w = req.width_mm - 2 * req.margin_mm
+    inner_h = req.height_mm - 2 * req.margin_mm
+    cols = max(1, int(inner_w // req.cell_mm))
+    rows = max(1, int(inner_h // req.cell_mm))
+    if cols * rows > MAX_HALFTONE_HOLES:
+        scale = math.sqrt((cols * rows) / MAX_HALFTONE_HOLES)
+        cols = max(1, int(cols / scale))
+        rows = max(1, int(rows / scale))
+    cell_w = inner_w / cols
+    cell_h = inner_h / rows
+    physical_cell = min(cell_w, cell_h)
+    allowed_max = max(req.min_diameter_mm, physical_cell - req.min_bridge_mm)
+    effective_max = min(req.max_diameter_mm, allowed_max)
+    sampled = _fit_image_cover(gray, cols, rows)
+    pix = sampled.load()
+    outer = box(0, 0, req.width_mm, req.height_mm)
+    cutouts: list[Polygon] = []
+    for y in range(rows):
+        for x in range(cols):
+            darkness = 1.0 - (pix[x, y] / 255.0)
+            if req.invert:
+                darkness = 1.0 - darkness
+            strength = max(0.0, min(1.0, darkness)) ** req.gamma
+            diameter = req.min_diameter_mm + (effective_max - req.min_diameter_mm) * strength
+            if diameter <= req.min_diameter_mm * 1.02 and strength < 0.05:
+                continue
+            cx = req.margin_mm + (x + 0.5) * cell_w
+            cy = req.margin_mm + (y + 0.5) * cell_h
+            cutouts.append(_halftone_shape(req.shape, cx, cy, diameter))
+    warnings: list[str] = []
+    if effective_max < req.max_diameter_mm:
+        warnings.append(f"Diámetro máximo limitado automáticamente a {effective_max:.2f} mm para conservar ≥ {req.min_bridge_mm:.2f} mm entre celdas")
+    recipe = req.model_dump(exclude={"image_data_uri"})
+    recipe.update({"engine": "halftone-cut", "source": "embedded-raster", "effective_max_diameter_mm": round(effective_max, 4), "grid": [cols, rows]})
+    artifact = CutArtifact(outer=outer, cutouts=tuple(cutouts), width_mm=req.width_mm, height_mm=req.height_mm, kind="halftone", recipe=recipe, warnings=tuple(warnings))
+    return artifact_response(artifact, req.min_bridge_mm)
+
+
