@@ -43,6 +43,7 @@ Motif = Literal["diamond", "circle", "hex", "star", "heart"]
 HalftoneShape = Literal["circle", "diamond", "hex"]
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 class PapercutRequest(BaseModel):
     width_mm: float = Field(default=180.0, ge=40.0, le=1200.0)
     height_mm: float = Field(default=260.0, ge=40.0, le=1200.0)
@@ -56,6 +57,7 @@ class PapercutRequest(BaseModel):
     min_bridge_mm: float = Field(default=1.5, ge=0.2, le=25.0)
     cut_outer: bool = True
 
+    # WHY: Mantiene explícita la razón de cada contrato para que geometría, validación y seguridad sean auditables.
     @model_validator(mode="after")
     def dimensions_make_sense(self) -> "PapercutRequest":
         if self.margin_mm * 2 >= min(self.width_mm, self.height_mm):
@@ -63,6 +65,7 @@ class PapercutRequest(BaseModel):
         return self
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 class HalftoneRequest(BaseModel):
     image_data_uri: str = Field(min_length=32, max_length=6_500_000)
     width_mm: float = Field(default=160.0, ge=20.0, le=1000.0)
@@ -77,6 +80,7 @@ class HalftoneRequest(BaseModel):
     shape: HalftoneShape = "circle"
     cut_outer: bool = True
 
+    # WHY: Mantiene explícita la razón de cada contrato para que geometría, validación y seguridad sean auditables.
     @model_validator(mode="after")
     def geometry_is_possible(self) -> "HalftoneRequest":
         if self.margin_mm * 2 >= min(self.width_mm, self.height_mm):
@@ -86,6 +90,7 @@ class HalftoneRequest(BaseModel):
         return self
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 class StencilRequest(BaseModel):
     image_data_uri: str = Field(min_length=32, max_length=6_500_000)
     width_mm: float = Field(default=160.0, ge=20.0, le=1000.0)
@@ -99,6 +104,7 @@ class StencilRequest(BaseModel):
     min_bridge_mm: float = Field(default=1.0, ge=0.1, le=20.0)
     cut_outer: bool = True
 
+    # WHY: Mantiene explícita la razón de cada contrato para que geometría, validación y seguridad sean auditables.
     @model_validator(mode="after")
     def frame_is_possible(self) -> "StencilRequest":
         if self.frame_mm * 2 >= min(self.width_mm, self.height_mm):
@@ -106,12 +112,14 @@ class StencilRequest(BaseModel):
         return self
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 class BridgeCouponRequest(BaseModel):
     widths_mm: list[float] = Field(default_factory=lambda: [0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 1.8, 2.0, 2.5, 3.0])
     length_mm: float = Field(default=24.0, ge=8.0, le=100.0)
     gap_mm: float = Field(default=4.0, ge=1.0, le=30.0)
     label: bool = True
 
+    # WHY: Mantiene explícita la razón de cada contrato para que geometría, validación y seguridad sean auditables.
     @field_validator("widths_mm")
     @classmethod
     def widths_valid(cls, value: list[float]) -> list[float]:
@@ -123,6 +131,7 @@ class BridgeCouponRequest(BaseModel):
         return out
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 class MaterialPassportRequest(BaseModel):
     """Sacrificial proof sheet used to measure physical geometry limits.
 
@@ -136,6 +145,7 @@ class MaterialPassportRequest(BaseModel):
     row_height_mm: float = Field(default=10.0, ge=6.0, le=30.0)
     feature_length_mm: float = Field(default=22.0, ge=8.0, le=60.0)
 
+    # WHY: Mantiene explícita la razón de cada contrato para que geometría, validación y seguridad sean auditables.
     @field_validator("bridge_widths_mm", "hole_diameters_mm", "gap_widths_mm")
     @classmethod
     def passport_values_valid(cls, value: list[float]) -> list[float]:
@@ -147,6 +157,7 @@ class MaterialPassportRequest(BaseModel):
         return values
 
 
+# WHY: Mantiene explícita la razón de cada contrato para que geometría, validación y seguridad sean auditables.
 @dataclass(frozen=True)
 class CutArtifact:
     outer: Polygon
@@ -159,6 +170,7 @@ class CutArtifact:
     warnings: tuple[str, ...] = ()
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def _decode_raster(data_uri: str) -> Image.Image:
     prefix = "base64,"
     if prefix not in data_uri:
@@ -180,6 +192,7 @@ def _decode_raster(data_uri: str) -> Image.Image:
         raise ValueError("PNG/JPG no decodificable") from exc
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def _polygon_path(poly: Polygon) -> str:
     def ring_path(coords: Any) -> str:
         pts = list(coords)
@@ -195,6 +208,7 @@ def _polygon_path(poly: Polygon) -> str:
     return " ".join(p for p in parts if p)
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def _geometry_paths(geom: Polygon | MultiPolygon) -> list[str]:
     if geom.is_empty:
         return []
@@ -203,6 +217,7 @@ def _geometry_paths(geom: Polygon | MultiPolygon) -> list[str]:
     return [_polygon_path(p) for p in geom.geoms if isinstance(p, Polygon) and not p.is_empty]
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def _motif_geometry(kind: Motif, cx: float, cy: float, radius: float) -> Polygon:
     if kind == "circle":
         return Point(cx, cy).buffer(radius, quad_segs=14)
@@ -224,6 +239,7 @@ def _motif_geometry(kind: Motif, cx: float, cy: float, radius: float) -> Polygon
     return unary_union([l, r, tri]).buffer(0)
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def _halftone_shape(kind: HalftoneShape, cx: float, cy: float, diameter: float) -> Polygon:
     r = diameter / 2.0
     if kind == "circle":
@@ -233,6 +249,7 @@ def _halftone_shape(kind: HalftoneShape, cx: float, cy: float, diameter: float) 
     return Polygon([(cx + math.cos(math.radians(a))*r, cy + math.sin(math.radians(a))*r) for a in range(0, 360, 60)])
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def _nearest_web_width(outer: Polygon, cutouts: list[Polygon]) -> tuple[float | None, list[dict[str, Any]]]:
     if not cutouts:
         return None, []
@@ -258,6 +275,7 @@ def _nearest_web_width(outer: Polygon, cutouts: list[Polygon]) -> tuple[float | 
     return (None if math.isinf(minimum) else minimum), hotspots[:12]
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def analyze_artifact(artifact: CutArtifact, min_bridge_mm: float) -> dict[str, Any]:
     cutouts = [g for g in artifact.cutouts if not g.is_empty and g.area > 1e-8]
     if len(cutouts) > MAX_PREFLIGHT_GEOMETRIES:
@@ -300,6 +318,7 @@ def analyze_artifact(artifact: CutArtifact, min_bridge_mm: float) -> dict[str, A
     }
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def artifact_svg(artifact: CutArtifact, *, preview: bool = False) -> str:
     meta = {
         "generator": "Marking Studio Laser Design Studio v0.9",
@@ -329,6 +348,7 @@ def artifact_svg(artifact: CutArtifact, *, preview: bool = False) -> str:
     return "".join(parts)
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def artifact_response(artifact: CutArtifact, min_bridge_mm: float) -> dict[str, Any]:
     preflight = analyze_artifact(artifact, min_bridge_mm)
     warnings = list(artifact.warnings)
@@ -347,6 +367,7 @@ def artifact_response(artifact: CutArtifact, min_bridge_mm: float) -> dict[str, 
     }
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def generate_papercut(req: PapercutRequest) -> dict[str, Any]:
     outer = box(0, 0, req.width_mm, req.height_mm)
     rng = random.Random(req.seed)
@@ -388,6 +409,7 @@ def generate_papercut(req: PapercutRequest) -> dict[str, Any]:
     return artifact_response(artifact, req.min_bridge_mm)
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def _fit_image_cover(gray: Image.Image, cols: int, rows: int) -> Image.Image:
     # Fit rather than stretch: crop the centre after preserving source aspect ratio.
     target_ratio = cols / rows
@@ -403,6 +425,7 @@ def _fit_image_cover(gray: Image.Image, cols: int, rows: int) -> Image.Image:
     return gray.resize((cols, rows), Image.Resampling.LANCZOS)
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def generate_halftone(req: HalftoneRequest) -> dict[str, Any]:
     gray = _decode_raster(req.image_data_uri)
     inner_w = req.width_mm - 2 * req.margin_mm
@@ -443,6 +466,7 @@ def generate_halftone(req: HalftoneRequest) -> dict[str, Any]:
     return artifact_response(artifact, req.min_bridge_mm)
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def _components(mask: list[list[bool]], value: bool) -> list[list[tuple[int, int]]]:
     rows = len(mask)
     cols = len(mask[0]) if rows else 0
@@ -466,6 +490,7 @@ def _components(mask: list[list[bool]], value: bool) -> list[list[tuple[int, int
     return out
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def _force_frame(material: list[list[bool]], frame_x: int, frame_y: int) -> None:
     rows = len(material); cols = len(material[0])
     for y in range(rows):
@@ -474,6 +499,7 @@ def _force_frame(material: list[list[bool]], frame_x: int, frame_y: int) -> None
                 material[y][x] = True
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def _bridge_to_frame(material: list[list[bool]], comp: list[tuple[int, int]], width_px: int) -> tuple[int, int, int, int]:
     rows = len(material); cols = len(material[0])
     # Choose the component pixel with the globally shortest cardinal route to the frame.
@@ -498,6 +524,7 @@ def _bridge_to_frame(material: list[list[bool]], comp: list[tuple[int, int]], wi
     return x0, y0, x1, y1
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def _mask_to_polygons(cut_mask: list[list[bool]], width_mm: float, height_mm: float) -> list[Polygon]:
     rows = len(cut_mask); cols = len(cut_mask[0]) if rows else 0
     sx = width_mm / cols; sy = height_mm / rows
@@ -521,6 +548,7 @@ def _mask_to_polygons(cut_mask: list[list[bool]], width_mm: float, height_mm: fl
     return []
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def generate_stencil(req: StencilRequest) -> dict[str, Any]:
     gray = _decode_raster(req.image_data_uri)
     ratio = req.width_mm / req.height_mm
@@ -589,6 +617,7 @@ def generate_stencil(req: StencilRequest) -> dict[str, Any]:
     return result
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def generate_bridge_coupon(req: BridgeCouponRequest) -> dict[str, Any]:
     # A physical bridge ladder: two large windows leave a narrow central ligament
     # whose width is known. The operator cuts it in sacrificial material and records
@@ -621,6 +650,7 @@ def generate_bridge_coupon(req: BridgeCouponRequest) -> dict[str, Any]:
 
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def generate_material_passport(req: MaterialPassportRequest) -> dict[str, Any]:
     """Generate a multi-constraint sacrificial sheet: bridges, holes and gaps.
 
@@ -721,6 +751,7 @@ def generate_material_passport(req: MaterialPassportRequest) -> dict[str, Any]:
     return result
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def capabilities() -> dict[str, Any]:
     return {
         "version": "0.9.0-experimental",
@@ -746,6 +777,7 @@ def capabilities() -> dict[str, Any]:
     }
 
 
+# WHY: Encapsula una responsabilidad geométrica verificable sin mezclarla con control de máquina.
 def _vtracer_available() -> bool:
     try:
         import vtracer  # type: ignore  # noqa: F401
