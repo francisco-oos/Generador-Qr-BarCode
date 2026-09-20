@@ -208,3 +208,108 @@ def _halftone_shape(kind: HalftoneShape, cx: float, cy: float, diameter: float) 
     return Polygon([(cx + math.cos(math.radians(a))*r, cy + math.sin(math.radians(a))*r) for a in range(0, 360, 60)])
 
 
+def _nearest_web_width(outer: Polygon, cutouts: list[Polygon]) -> tuple[float | None, list[dict[str, Any]]]:
+    if not cutouts:
+        return None, []
+    hotspots: list[dict[str, Any]] = []
+    minimum = math.inf
+    boundary = outer.exterior
+    for i, g in enumerate(cutouts):
+        d = float(g.distance(boundary))
+        minimum = min(minimum, d)
+        hotspots.append({"kind": "edge", "index": i, "distance_mm": round(d, 4)})
+    if len(cutouts) > 1:
+        tree = STRtree(cutouts)
+        for i, g in enumerate(cutouts):
+            try:
+                idx, dist = tree.query_nearest(g, exclusive=True, return_distance=True)
+            except TypeError:
+                continue
+            if len(dist):
+                d = float(min(dist))
+                minimum = min(minimum, d)
+                hotspots.append({"kind": "between_cutouts", "index": i, "distance_mm": round(d, 4)})
+    hotspots.sort(key=lambda x: x["distance_mm"])
+    return (None if math.isinf(minimum) else minimum), hotspots[:12]
+
+
+def analyze_artifact(artifact: CutArtifact, min_bridge_mm: float) -> dict[str, Any]:
+    cutouts = [g for g in artifact.cutouts if not g.is_empty and g.area > 1e-8]
+    if len(cutouts) > MAX_PREFLIGHT_GEOMETRIES:
+        raise ValueError("Demasiadas geometrías para preflight")
+    union = unary_union(cutouts) if cutouts else Polygon()
+    remaining = artifact.outer.difference(union)
+    if isinstance(remaining, Polygon):
+        components = 1 if not remaining.is_empty else 0
+    elif isinstance(remaining, MultiPolygon):
+        components = len(remaining.geoms)
+    else:
+        components = 0
+    web, hotspots = _nearest_web_width(artifact.outer, cutouts)
+    area_ratio = 0.0 if artifact.outer.area <= 0 else min(1.0, max(0.0, union.intersection(artifact.outer).area / artifact.outer.area))
+    safe_scale = None
+    if web and web > 0:
+        safe_scale = max(100.0, (min_bridge_mm / web) * 100.0)
+    status = "PASS"
+    issues: list[str] = []
+    if components != 1:
+        status = "FAIL"
+        issues.append(f"El material restante queda en {components} componentes; debe ser una sola pieza")
+    if web is not None and web < min_bridge_mm:
+        status = "FAIL" if web < min_bridge_mm * 0.65 else "WARN"
+        issues.append(f"Puente/espacio mínimo estimado {web:.2f} mm < objetivo {min_bridge_mm:.2f} mm")
+    if area_ratio > 0.72:
+        if status == "PASS":
+            status = "WARN"
+        issues.append("Se elimina más del 72 % del área; la pieza puede quedar frágil")
+    return {
+        "status": status,
+        "component_count": components,
+        "cutout_count": len(cutouts),
+        "removed_area_ratio": round(area_ratio, 4),
+        "min_web_mm": None if web is None else round(web, 4),
+        "target_min_bridge_mm": round(min_bridge_mm, 4),
+        "minimum_safe_scale_percent": None if safe_scale is None else round(safe_scale, 1),
+        "hotspots": hotspots,
+        "issues": issues,
+    }
+
+
+def artifact_svg(artifact: CutArtifact, *, preview: bool = False) -> str:
+    meta = {
+        "generator": "Marking Studio Laser Design Studio v0.9",
+        "kind": artifact.kind,
+        "units": "mm",
+        "machine_control": False,
+        "recipe": artifact.recipe,
+    }
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{artifact.width_mm:.4f}mm" height="{artifact.height_mm:.4f}mm" viewBox="0 0 {artifact.width_mm:.4f} {artifact.height_mm:.4f}">',
+        f"<metadata>{escape(json.dumps(meta, ensure_ascii=False, sort_keys=True))}</metadata>",
+        '<g id="layer_cut" data-operation="cut" fill="none" stroke="#000" stroke-width="0.10" vector-effect="non-scaling-stroke">',
+    ]
+    if artifact.recipe.get("cut_outer", True):
+        parts.append(f'<path id="outer_cut" d="{_polygon_path(artifact.outer)}"/>')
+    for i, g in enumerate(artifact.cutouts):
+        for j, d in enumerate(_geometry_paths(g)):
+            parts.append(f'<path id="cutout_{i:04d}_{j}" d="{d}"/>')
+    parts.append("</g>")
+    if preview and artifact.guides:
+        parts.append('<g id="layer_guides" data-operation="guide" fill="none" stroke="#1f6feb" stroke-width="0.20" stroke-dasharray="1 1">')
+        for i, g in enumerate(artifact.guides):
+            for d in _geometry_paths(g):
+                parts.append(f'<path id="guide_bridge_{i:03d}" d="{d}"/>')
+        parts.append("</g>")
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def artifact_response(artifact: CutArtifact, min_bridge_mm: float) -> dict[str, Any]:
+    preflight = analyze_artifact(artifact, min_bridge_mm)
+    warnings = list(artifact.warnings)
+    warnings.extend(preflight["issues"])
+    return {
+        "kind": artifact.kind,
+        "width_mm": artifact.width_mm,
+        "height_mm": artifact.height_mm,
+        "svg": artifact_svg(artifact, preview=False),
