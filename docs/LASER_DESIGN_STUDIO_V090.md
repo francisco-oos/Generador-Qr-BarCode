@@ -74,6 +74,16 @@ Los generadores procedurales guardan receta + semilla. Dos ejecuciones con la mi
 
 La primera implementación conecta islas del stencil al marco. El siguiente nivel será puntuar rutas candidatas por longitud, impacto visual, simetría y resistencia, en lugar de elegir sólo la ruta cardinal más corta.
 
+### Material DNA Passport
+
+Genera una hoja sacrificial reproducible que combina tres familias de probetas: puentes de material, agujeros mínimos repetidos y separaciones entre cortes. Cada receta recibe un `passport_id` estable. Después del corte, el operador registra el menor valor que sale íntegro y repetible para cada familia.
+
+El pasaporte **no certifica** un material ni calcula potencia/velocidad. Convierte observaciones físicas de un proceso ya establecido en restricciones geométricas que los generadores pueden usar después. Esto permite que papel picado, halftone y stencil compartan un mismo conjunto de límites reales en lugar de valores arbitrarios.
+
+### Self-Guarding Geometry
+
+El objetivo no es generar primero y reparar siempre después. Cuando una restricción ya es conocida, el generador debe respetarla durante la construcción: halftone limita automáticamente el diámetro de perforación, papel picado limita el tamaño de motivos y stencil conserva/construye material de unión. El preflight permanece como segunda barrera independiente.
+
 ## Investigación consolidada y decisión de integración
 
 ### BridgeIt
@@ -137,7 +147,7 @@ La UI oculta parámetros que no pertenecen al modo actual. Imagen se carga por d
 4. **Nesting Adapter**: múltiples diseños sobre hoja/material con separación configurable.
 5. **Material Fingerprint**: guardar resultado del Bridge Ladder por material, espesor, máquina y preset ya validado.
 6. **Constraint-aware generator**: generar variantes decorativas que nunca creen una característica menor al límite físico elegido.
-7. **Production proof sheet**: una hoja que combine kerf coupon, bridge ladder, small-hole ladder y muestras de grabado para caracterizar un nuevo material en una sola sesión.
+7. **Production proof sheet ampliada**: Material DNA ya integra bridge/hole/gap; una fase posterior puede sumar kerf y muestras de grabado manteniendo operaciones semánticas separadas.
 
 ## Estado de aceptación
 
