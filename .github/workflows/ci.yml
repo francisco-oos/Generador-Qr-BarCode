@@ -25,4 +25,5 @@ jobs:
       - run: python -m compileall -q app scripts tests
       - run: python -m pytest -q
       - run: node --check app/static/app.js
+      - run: node --check app/static/laser_design.js
       - run: python scripts/compatibility_check.py
