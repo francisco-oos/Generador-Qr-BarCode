@@ -83,10 +83,15 @@ from .calibration import calibration_target_svg, evaluate_reference_points, jig_
 from .material_catalog import phone_reference, search_material_reference
 from .code_quality import assess_template_codes
 from .marking_coupon import render_marking_coupon
+from .laser_design_studio import (
+    PapercutRequest, HalftoneRequest, StencilRequest, BridgeCouponRequest,
+    capabilities as laser_design_capabilities,
+    generate_papercut, generate_halftone, generate_stencil, generate_bridge_coupon,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "app" / "static"
-VERSION = "0.8.0"
+VERSION = "0.9.0"
 
 
 # WHY: Inicializa almacenamiento y recursos una sola vez al arrancar/cerrar la aplicación.
@@ -140,13 +145,55 @@ def health() -> dict[str, Any]:
         "scanners": len(load_scanners()),
         "direct_laser_job_streaming": False,
         "grbl_read_only_probe": True,
+        "laser_design_studio": True,
+        "openai_experimental_lab": True,
     }
 
 
 # WHY: Permite a la UI mostrar estado de licencia sin acceder directamente a archivos de firma.
+@app.get("/laser-design")
+def laser_design_index() -> FileResponse:
+    """Experimental design surface; document generation only, never machine control."""
+    return FileResponse(STATIC / "laser_design.html")
+
+
 @app.get("/api/license")
 def license_status() -> dict[str, Any]:
     return _license_status()
+
+
+@app.get("/api/laser-design/capabilities")
+def laser_design_capabilities_api() -> dict[str, Any]:
+    _require_license()
+    return laser_design_capabilities()
+
+
+def _laser_design_call(fn, req):
+    _require_license()
+    try:
+        return fn(req)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/api/laser-design/papercut")
+def laser_design_papercut(req: PapercutRequest) -> dict[str, Any]:
+    return _laser_design_call(generate_papercut, req)
+
+
+@app.post("/api/laser-design/halftone")
+def laser_design_halftone(req: HalftoneRequest) -> dict[str, Any]:
+    return _laser_design_call(generate_halftone, req)
+
+
+@app.post("/api/laser-design/stencil")
+def laser_design_stencil(req: StencilRequest) -> dict[str, Any]:
+    return _laser_design_call(generate_stencil, req)
+
+
+@app.post("/api/laser-design/openai-lab/bridge-coupon")
+def laser_design_bridge_coupon(req: BridgeCouponRequest) -> dict[str, Any]:
+    return _laser_design_call(generate_bridge_coupon, req)
 
 
 # WHY: Entrega plantillas, jigs, máquinas, lectores y calidad desde configuración, evitando catálogos duplicados en JavaScript.
