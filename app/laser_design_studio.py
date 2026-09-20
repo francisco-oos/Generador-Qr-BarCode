@@ -418,3 +418,209 @@ def generate_halftone(req: HalftoneRequest) -> dict[str, Any]:
     return artifact_response(artifact, req.min_bridge_mm)
 
 
+def _components(mask: list[list[bool]], value: bool) -> list[list[tuple[int, int]]]:
+    rows = len(mask)
+    cols = len(mask[0]) if rows else 0
+    seen = [[False] * cols for _ in range(rows)]
+    out: list[list[tuple[int, int]]] = []
+    for y in range(rows):
+        for x in range(cols):
+            if seen[y][x] or mask[y][x] != value:
+                continue
+            stack = [(x, y)]
+            seen[y][x] = True
+            comp: list[tuple[int, int]] = []
+            while stack:
+                px, py = stack.pop()
+                comp.append((px, py))
+                for nx, ny in ((px-1, py), (px+1, py), (px, py-1), (px, py+1)):
+                    if 0 <= nx < cols and 0 <= ny < rows and not seen[ny][nx] and mask[ny][nx] == value:
+                        seen[ny][nx] = True
+                        stack.append((nx, ny))
+            out.append(comp)
+    return out
+
+
+def _force_frame(material: list[list[bool]], frame_x: int, frame_y: int) -> None:
+    rows = len(material); cols = len(material[0])
+    for y in range(rows):
+        for x in range(cols):
+            if x < frame_x or x >= cols-frame_x or y < frame_y or y >= rows-frame_y:
+                material[y][x] = True
+
+
+def _bridge_to_frame(material: list[list[bool]], comp: list[tuple[int, int]], width_px: int) -> tuple[int, int, int, int]:
+    rows = len(material); cols = len(material[0])
+    # Choose the component pixel with the globally shortest cardinal route to the frame.
+    best = None
+    for x, y in comp:
+        candidates = [(x, "left"), (cols-1-x, "right"), (y, "top"), (rows-1-y, "bottom")]
+        dist, side = min(candidates, key=lambda z: z[0])
+        if best is None or dist < best[0]:
+            best = (dist, side, x, y)
+    assert best is not None
+    _, side, x, y = best
+    half = max(0, width_px // 2)
+    if side in {"left", "right"}:
+        y0, y1 = max(0, y-half), min(rows, y+half+1)
+        x0, x1 = (0, x+1) if side == "left" else (x, cols)
+    else:
+        x0, x1 = max(0, x-half), min(cols, x+half+1)
+        y0, y1 = (0, y+1) if side == "top" else (y, rows)
+    for yy in range(y0, y1):
+        for xx in range(x0, x1):
+            material[yy][xx] = True
+    return x0, y0, x1, y1
+
+
+def _mask_to_polygons(cut_mask: list[list[bool]], width_mm: float, height_mm: float) -> list[Polygon]:
+    rows = len(cut_mask); cols = len(cut_mask[0]) if rows else 0
+    sx = width_mm / cols; sy = height_mm / rows
+    runs: list[Polygon] = []
+    for y, row in enumerate(cut_mask):
+        x = 0
+        while x < cols:
+            if not row[x]:
+                x += 1; continue
+            start = x
+            while x < cols and row[x]:
+                x += 1
+            runs.append(box(start*sx, y*sy, x*sx, (y+1)*sy))
+    if not runs:
+        return []
+    merged = unary_union(runs)
+    if isinstance(merged, Polygon):
+        return [merged]
+    if isinstance(merged, MultiPolygon):
+        return [p for p in merged.geoms if p.area > 1e-8]
+    return []
+
+
+def generate_stencil(req: StencilRequest) -> dict[str, Any]:
+    gray = _decode_raster(req.image_data_uri)
+    ratio = req.width_mm / req.height_mm
+    if ratio >= 1:
+        cols = req.sample_max_px
+        rows = max(16, round(cols / ratio))
+    else:
+        rows = req.sample_max_px
+        cols = max(16, round(rows * ratio))
+    sampled = _fit_image_cover(gray, cols, rows)
+    pix = sampled.load()
+    # True = material retained, False = region to cut out.
+    material: list[list[bool]] = []
+    for y in range(rows):
+        row: list[bool] = []
+        for x in range(cols):
+            dark = pix[x, y] < req.threshold
+            if req.invert:
+                dark = not dark
+            row.append(not dark)
+        material.append(row)
+    sx, sy = req.width_mm / cols, req.height_mm / rows
+    frame_x = max(1, math.ceil(req.frame_mm / sx))
+    frame_y = max(1, math.ceil(req.frame_mm / sy))
+    _force_frame(material, frame_x, frame_y)
+
+    guides_px: list[tuple[int, int, int, int]] = []
+    bridge_px = max(1, math.ceil(req.bridge_width_mm / min(sx, sy)))
+    # Every retained-material component not connected to the forced frame is an island.
+    # Bridge iteratively and recompute because one bridge can merge several components.
+    bridges = 0
+    while bridges < req.max_auto_bridges:
+        comps = _components(material, True)
+        islands = []
+        for comp in comps:
+            touches = any(x < frame_x or x >= cols-frame_x or y < frame_y or y >= rows-frame_y for x, y in comp)
+            if not touches:
+                islands.append(comp)
+        if not islands:
+            break
+        islands.sort(key=len, reverse=True)
+        guides_px.append(_bridge_to_frame(material, islands[0], bridge_px))
+        bridges += 1
+
+    remaining_islands = 0
+    for comp in _components(material, True):
+        if not any(x < frame_x or x >= cols-frame_x or y < frame_y or y >= rows-frame_y for x, y in comp):
+            remaining_islands += 1
+    cut_mask = [[not v for v in row] for row in material]
+    cutouts = _mask_to_polygons(cut_mask, req.width_mm, req.height_mm)
+    guide_polys = [box(x0*sx, y0*sy, x1*sx, y1*sy) for x0, y0, x1, y1 in guides_px]
+    warnings: list[str] = []
+    if remaining_islands:
+        warnings.append(f"Quedan {remaining_islands} islas sin conectar; aumente max_auto_bridges o ajuste la imagen")
+    if bridges:
+        warnings.append(f"Se insertaron {bridges} puentes automáticos de material; revíselos en la vista previa antes de cortar")
+    recipe = req.model_dump(exclude={"image_data_uri"})
+    recipe.update({"engine": "raster-stencil-bridge-planner", "source": "embedded-raster", "grid": [cols, rows], "auto_bridges": bridges, "remaining_islands": remaining_islands})
+    artifact = CutArtifact(
+        outer=box(0, 0, req.width_mm, req.height_mm), cutouts=tuple(cutouts),
+        width_mm=req.width_mm, height_mm=req.height_mm, kind="stencil",
+        recipe=recipe, guides=tuple(guide_polys), warnings=tuple(warnings),
+    )
+    result = artifact_response(artifact, req.min_bridge_mm)
+    result["bridge_plan"] = {"auto_bridges": bridges, "remaining_islands": remaining_islands, "bridge_width_mm": req.bridge_width_mm}
+    return result
+
+
+def generate_bridge_coupon(req: BridgeCouponRequest) -> dict[str, Any]:
+    # A physical bridge ladder: two large windows leave a narrow central ligament
+    # whose width is known. The operator cuts it in sacrificial material and records
+    # the smallest width that survives cleanly. No laser parameters are inferred.
+    margin = 6.0
+    row_h = max(10.0, max(req.widths_mm) + 6.0)
+    width = margin*2 + req.length_mm*2 + req.gap_mm
+    height = margin*2 + row_h*len(req.widths_mm)
+    outer = box(0, 0, width, height)
+    holes: list[Polygon] = []
+    label_guides: list[Polygon] = []
+    for i, bridge in enumerate(req.widths_mm):
+        cy = margin + row_h*(i+0.5)
+        h = max(2.0, row_h - 3.0)
+        left_end = width/2 - bridge/2
+        right_start = width/2 + bridge/2
+        holes.append(box(margin, cy-h/2, left_end, cy+h/2))
+        holes.append(box(right_start, cy-h/2, width-margin, cy+h/2))
+        # Tiny guide tick outside the cut windows, useful for visual identification.
+        label_guides.append(box(width-3.5, cy-0.15, width-1.5, cy+0.15))
+    recipe = {"engine": "openai-bridge-ladder", **req.model_dump(), "cut_outer": True, "purpose": "physical minimum-feature calibration"}
+    artifact = CutArtifact(outer=outer, cutouts=tuple(holes), width_mm=width, height_mm=height, kind="bridge-coupon", recipe=recipe, guides=tuple(label_guides), warnings=("Cupón experimental: use material de sacrificio y registre el ancho mínimo que sobreviva; no deduce potencia/velocidad.",))
+    result = artifact_response(artifact, min(req.widths_mm))
+    result["calibration_steps"] = [
+        "Corte el cupón en material de sacrificio con los ajustes que usted ya usa.",
+        "Identifique el puente más estrecho que sale íntegro y repetible.",
+        "Use ese valor (con margen de seguridad) como min_bridge_mm para diseños futuros.",
+    ]
+    return result
+
+
+def capabilities() -> dict[str, Any]:
+    return {
+        "version": "0.9.0-experimental",
+        "geometry_units": "mm",
+        "machine_control": False,
+        "engines": {
+            "papercut": {"available": True, "provider": "native-parametric"},
+            "halftone": {"available": True, "provider": "native-pillow-shapely"},
+            "stencil": {"available": True, "provider": "native-raster-bridge-planner"},
+            "manufacturability": {"available": True, "provider": "shapely"},
+            "vtracer": {"available": _vtracer_available(), "provider": "optional-vtracer", "role": "future high-detail vectorisation"},
+            "nesting": {"available": False, "provider": "adapter-reserved", "role": "future Deepnest-compatible packing boundary"},
+        },
+        "openai_lab": {
+            "cut_survival_map": True,
+            "minimum_safe_scale": True,
+            "adaptive_bridge_planner": True,
+            "bridge_ladder_coupon": True,
+            "reproducible_design_genome": True,
+        },
+    }
+
+
+def _vtracer_available() -> bool:
+    try:
+        import vtracer  # type: ignore  # noqa: F401
+        return True
+    except Exception:
+        return False
