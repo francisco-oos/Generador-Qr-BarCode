@@ -30,11 +30,17 @@ def api_static_fallback() -> dict:
     result: dict[str, object] = {}
     with TestClient(app) as client:
         health = client.get("/api/health")
-        result["health"] = health.status_code == 200 and health.json().get("version") == "0.8.0"
+        result["health"] = health.status_code == 200 and health.json().get("version") == "0.9.0"
         index = client.get("/")
         text = index.text
         result["index"] = index.status_code == 200
         result["guided_controls"] = all(x in text for x in ("guidedModeBtn", "expertModeBtn", "calibration", "designerCanvas", "saveVisualTemplateBtn"))
+        laser_page = client.get("/laser-design")
+        result["laser_design_page"] = laser_page.status_code == 200 and "Laser Design Studio" in laser_page.text
+        caps = client.get("/api/laser-design/capabilities")
+        result["laser_design_capabilities"] = caps.status_code == 200 and caps.json().get("machine_control") is False
+        papercut = client.post("/api/laser-design/papercut", json={"width_mm": 80, "height_mm": 100, "rows": 4, "cols": 4, "seed": 42})
+        result["laser_design_papercut"] = papercut.status_code == 200 and papercut.json().get("preflight", {}).get("component_count") == 1
         catalog = client.get("/api/catalog")
         result["catalog"] = catalog.status_code == 200 and len(catalog.json().get("templates", [])) >= 5
         calib = client.get("/api/calibration/jig/inova_tray_3x4_estimate")
