@@ -79,7 +79,7 @@ def test_laser_design_frontend_contract_has_no_dangling_ids_or_machine_commands(
     referenced = set(re.findall(r"\$\(['\"]([A-Za-z0-9_-]+)['\"]\)", js))
     ids = set(re.findall(r'\bid=["\']([^"\']+)["\']', html))
     assert not (referenced - ids), sorted(referenced - ids)
-    for endpoint in ('/api/laser-design/papercut','/api/laser-design/halftone','/api/laser-design/stencil','/api/laser-design/openai-lab/bridge-coupon'):
+    for endpoint in ('/api/laser-design/papercut','/api/laser-design/halftone','/api/laser-design/stencil','/api/laser-design/openai-lab/bridge-coupon','/api/laser-design/openai-lab/material-passport'):
         assert endpoint in js
     assert 'G0 ' not in js and 'G1 ' not in js and 'M3 ' not in js and 'M4 ' not in js
 
