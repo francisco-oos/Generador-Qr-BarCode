@@ -157,18 +157,16 @@ def laser_design_index() -> FileResponse:
     return FileResponse(STATIC / "laser_design.html")
 
 
-@app.get("/api/license")
-def license_status() -> dict[str, Any]:
+# WHY: Expone el estado de licencia al frontend sin revelar archivos o claves de firma.\n@app.get("/api/license")\ndef license_status() -> dict[str, Any]:
     return _license_status()
 
 
-@app.get("/api/laser-design/capabilities")
-def laser_design_capabilities_api() -> dict[str, Any]:
+# WHY: Permite que la UI descubra motores opcionales sin asumir dependencias instaladas.\n@app.get("/api/laser-design/capabilities")\ndef laser_design_capabilities_api() -> dict[str, Any]:
     _require_license()
     return laser_design_capabilities()
 
 
-def _laser_design_call(fn, req):
+# WHY: Centraliza licencia y traducción de errores para todas las herramientas experimentales.\ndef _laser_design_call(fn, req):
     _require_license()
     try:
         return fn(req)
@@ -176,28 +174,23 @@ def _laser_design_call(fn, req):
         raise HTTPException(400, str(exc)) from exc
 
 
-@app.post("/api/laser-design/papercut")
-def laser_design_papercut(req: PapercutRequest) -> dict[str, Any]:
+# WHY: Mantiene papel picado como generador de documento separado del controlador láser.\n@app.post("/api/laser-design/papercut")\ndef laser_design_papercut(req: PapercutRequest) -> dict[str, Any]:
     return _laser_design_call(generate_papercut, req)
 
 
-@app.post("/api/laser-design/halftone")
-def laser_design_halftone(req: HalftoneRequest) -> dict[str, Any]:
+# WHY: Expone conversión fotográfica a geometría de corte con límites físicos explícitos.\n@app.post("/api/laser-design/halftone")\ndef laser_design_halftone(req: HalftoneRequest) -> dict[str, Any]:
     return _laser_design_call(generate_halftone, req)
 
 
-@app.post("/api/laser-design/stencil")
-def laser_design_stencil(req: StencilRequest) -> dict[str, Any]:
+# WHY: Expone stencil con puentes planificados sin transmitir comandos a la máquina.\n@app.post("/api/laser-design/stencil")\ndef laser_design_stencil(req: StencilRequest) -> dict[str, Any]:
     return _laser_design_call(generate_stencil, req)
 
 
-@app.post("/api/laser-design/openai-lab/bridge-coupon")
-def laser_design_bridge_coupon(req: BridgeCouponRequest) -> dict[str, Any]:
+# WHY: Aísla la calibración sacrificial experimental del flujo productivo estable.\n@app.post("/api/laser-design/openai-lab/bridge-coupon")\ndef laser_design_bridge_coupon(req: BridgeCouponRequest) -> dict[str, Any]:
     return _laser_design_call(generate_bridge_coupon, req)
 
 
-@app.post("/api/laser-design/openai-lab/material-passport")
-def laser_design_material_passport(req: MaterialPassportRequest) -> dict[str, Any]:
+# WHY: Expone una hoja reproducible para medir restricciones geométricas del material real.\n@app.post("/api/laser-design/openai-lab/material-passport")\ndef laser_design_material_passport(req: MaterialPassportRequest) -> dict[str, Any]:
     return _laser_design_call(generate_material_passport, req)
 
 
