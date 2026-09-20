@@ -7,7 +7,7 @@
 - Adds raster-to-stencil conversion with automatic material bridges.
 - Adds manufacturability preflight and minimum safe-scale calculation.
 - Adds separate `/laser-design` guided UI.
-- Adds OpenAI Experimental Lab Bridge Ladder coupon and reproducible Design Genome.
+- Adds OpenAI Experimental Lab Bridge Ladder coupon and reproducible Design Genome.\n- Adds Material DNA Passport for sacrificial bridge/hole/gap characterization and Self-Guarding Geometry constraints.
 - Keeps all machine control outside Marking Studio.
 
 ## 0.8.0 — 2026-09-13
