@@ -27,7 +27,10 @@ jobs:
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libcairo2-dev pkg-config libzbar0
       - if: runner.os == 'macOS'
-        run: brew install cairo pkg-config zbar
+        run: |
+          brew install cairo pkg-config zbar
+          echo "DYLD_FALLBACK_LIBRARY_PATH=$(brew --prefix zbar)/lib:/opt/homebrew/lib:/usr/local/lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$(brew --prefix zbar)/lib/pkgconfig:$(brew --prefix cairo)/lib/pkgconfig" >> "$GITHUB_ENV"
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements-qa.txt
       - run: python -m compileall -q app scripts tests
