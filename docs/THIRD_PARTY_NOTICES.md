@@ -20,3 +20,8 @@ Dependencias Python principales declaradas por el proyecto y licencia reportada 
 Dependencias sólo de QA incluyen OpenCV Python Headless (Apache-2.0), HTTPX (BSD-3-Clause) y pytest (MIT en la versión validada). `pyzbar` pasó a runtime para habilitar el preflight digital; su librería nativa `zbar` puede requerir instalación del sistema en Linux/macOS.
 
 La tabla es un inventario técnico, no sustituye conservar los avisos/licencias exigidos por cada dependencia si el producto se distribuye comercialmente. Antes de una distribución externa o empaquetado binario conviene generar un bundle completo de notices/licencias desde el entorno de build.
+
+
+## Shapely 2.1.2
+
+Used by the experimental Laser Design Studio geometry/preflight core for polygon operations and spatial distance analysis. Shapely is distributed under the BSD 3-Clause license. This project does not modify or vendor Shapely source code.
