@@ -100,3 +100,13 @@ def test_material_dna_passport_is_deterministic_and_machine_independent():
     assert zones == {"bridge", "hole", "gap"}
     assert "power" not in str(a["measurement_schema"]).lower()
     assert "G0 " not in a["svg"] and "M3 " not in a["svg"]
+
+
+def test_frontend_id_helper_is_never_called_with_css_selector():
+    import re
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / 'app/static/laser_design.js').read_text(encoding='utf-8')
+    helper_args = re.findall(r"\$\(['\"]([^'\"]+)['\"]\)", js)
+    invalid = [value for value in helper_args if value.startswith(('.', '#', '[', ':'))]
+    assert invalid == [], f"getElementById helper received CSS selectors: {invalid}"
