@@ -1,4 +1,6 @@
-# 0.9.0 — experimental Laser Design Studio
+# Changelog
+
+## 0.9.0 — experimental Laser Design Studio
 
 - Adds parametric papel picado generation.
 - Adds raster-to-halftone cut geometry.
@@ -7,8 +9,6 @@
 - Adds separate `/laser-design` guided UI.
 - Adds OpenAI Experimental Lab Bridge Ladder coupon and reproducible Design Genome.
 - Keeps all machine control outside Marking Studio.
-
-# Changelog
 
 ## 0.8.0 — 2026-09-13
 
