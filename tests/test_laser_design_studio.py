@@ -68,3 +68,17 @@ def test_capabilities_reserve_optional_providers_without_requiring_them():
     assert c['engines']['papercut']['available'] is True
     assert c['engines']['nesting']['available'] is False
     assert c['openai_lab']['cut_survival_map'] is True
+
+
+def test_laser_design_frontend_contract_has_no_dangling_ids_or_machine_commands():
+    import re
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    html = (root / 'app/static/laser_design.html').read_text(encoding='utf-8')
+    js = (root / 'app/static/laser_design.js').read_text(encoding='utf-8')
+    referenced = set(re.findall(r"\$\(['\"]([A-Za-z0-9_-]+)['\"]\)", js))
+    ids = set(re.findall(r'\bid=["\']([^"\']+)["\']', html))
+    assert not (referenced - ids), sorted(referenced - ids)
+    for endpoint in ('/api/laser-design/papercut','/api/laser-design/halftone','/api/laser-design/stencil','/api/laser-design/openai-lab/bridge-coupon'):
+        assert endpoint in js
+    assert 'G0 ' not in js and 'G1 ' not in js and 'M3 ' not in js and 'M4 ' not in js
