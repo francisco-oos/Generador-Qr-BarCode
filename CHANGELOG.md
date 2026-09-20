@@ -1,3 +1,13 @@
+# 0.9.0 — experimental Laser Design Studio
+
+- Adds parametric papel picado generation.
+- Adds raster-to-halftone cut geometry.
+- Adds raster-to-stencil conversion with automatic material bridges.
+- Adds manufacturability preflight and minimum safe-scale calculation.
+- Adds separate `/laser-design` guided UI.
+- Adds OpenAI Experimental Lab Bridge Ladder coupon and reproducible Design Genome.
+- Keeps all machine control outside Marking Studio.
+
 # Changelog
 
 ## 0.8.0 — 2026-09-13
