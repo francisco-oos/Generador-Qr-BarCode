@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0 — experimental Laser Design Studio
+
+- Adds parametric papel picado generation.
+- Adds raster-to-halftone cut geometry.
+- Adds raster-to-stencil conversion with automatic material bridges.
+- Adds manufacturability preflight and minimum safe-scale calculation.
+- Adds separate `/laser-design` guided UI.
+- Adds OpenAI Experimental Lab Bridge Ladder coupon and reproducible Design Genome.\n- Adds Material DNA Passport for sacrificial bridge/hole/gap characterization and Self-Guarding Geometry constraints.
+- Keeps all machine control outside Marking Studio.
+
 ## 0.8.0 — 2026-09-13
 
 Evolución del modo negativo puntual de 0.7.1 hacia un modelo físico versionado y auditable. No se sustituyeron los motores matemáticos de Code 128, Code 39, QR ni Data Matrix, ni la frontera de máquina.

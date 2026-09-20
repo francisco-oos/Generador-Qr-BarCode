@@ -1,4 +1,4 @@
-# Server Oficina Marking Studio v0.8.0
+# Server Oficina Marking Studio v0.9.0 — experimental Laser Design Studio
 
 Generador local y auditable de **marcado físico de activos** para Server Oficina. Convierte identidades provenientes de captura manual, CSV o futura BD en texto + Code 128/QR/Data Matrix, las posiciona sobre jigs/bases, exige conciliación física y entrega archivos a Sculpfun Space/LightBurn/LaserGRBL sin controlar directamente el láser.
 
@@ -7,6 +7,23 @@ Generador local y auditable de **marcado físico de activos** para Server Oficin
 Un nodo sin etiqueta puede seguir siendo reconocible si se le graba `Q00525499`, pero el texto aislado obliga a capturas/verificaciones manuales. Marking Studio mantiene la inspección visual y agrega una representación escaneable. Para INOVA se parte de **Code 128 + ID operativo visible**; Sercel inicia con Code 128 + ID; teléfonos con QR + número económico estable.
 
 El sufijo INOVA `-xx` no se inventa. Se conserva como dato adicional cuando exista, pero el estándar operativo inicial usa el identificador realmente utilizado por la operación.
+
+## Novedades v0.9.0 experimental
+
+Esta rama conserva íntegro el flujo de identificación v0.8 y añade una superficie aislada en `/laser-design` para explorar diseño de corte sin convertir Marking Studio en controlador de máquina.
+
+- **Papel picado paramétrico** con motivos, simetría y semilla reproducible (`Design Genome`).
+- **Foto → halftone de corte**: luminosidad a perforaciones con diámetro limitado automáticamente para conservar el puente mínimo configurado.
+- **Foto → stencil** con detección de islas y **Adaptive Bridge Planner** para conectar material retenido al marco.
+- **Preflight de manufacturabilidad**: conectividad de la pieza restante, área retirada, separación/puente mínimo, hotspots y escala mínima segura.
+- **Self-Guarding Geometry**: las restricciones físicas conocidas participan durante la generación, no sólo como advertencia posterior.
+- **OpenAI Experimental Lab** con Bridge Ladder y **Material DNA Passport**, hoja sacrificial reproducible que caracteriza puentes, agujeros mínimos y separación entre cortes.
+- Fronteras preparadas para vectorización opcional (VTracer) y nesting futuro sin convertir esos motores en dependencias obligatorias.
+- La frontera de seguridad permanece: **sin G-code, movimiento, potencia ni streaming de trabajos al láser**.
+
+Documentación de esta evolución: `docs/LASER_DESIGN_STUDIO_V090.md`.
+
+Estado: software experimental validado por suite automatizada multiplataforma; la aceptación física de material/máquina sigue requiriendo pruebas sacrificiales.
 
 ## Novedades v0.8.0
 
@@ -176,6 +193,7 @@ La base física y el dataset son independientes. 1,200 registros con una base de
 
 Empiece por:
 
+- `docs/LASER_DESIGN_STUDIO_V090.md` — arquitectura, investigación y OpenAI Experimental Lab de v0.9;
 - `docs/MANUAL_RAPIDO.md` — operación simple;
 - `docs/PROBLEM_AND_PROPOSAL.md` — problema y propósito;
 - `docs/RESEARCH_AND_DESIGN.md` — investigación, decisiones y descartes;

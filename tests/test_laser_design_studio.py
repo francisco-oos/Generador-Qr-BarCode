@@ -1,0 +1,127 @@
+from __future__ import annotations
+import base64, io
+from PIL import Image, ImageDraw
+from app.laser_design_studio import (
+    PapercutRequest, HalftoneRequest, StencilRequest, BridgeCouponRequest, MaterialPassportRequest,
+    generate_papercut, generate_halftone, generate_stencil,
+    generate_bridge_coupon, generate_material_passport, capabilities,
+)
+
+
+def png_uri(drawer) -> str:
+    im = Image.new('L', (96, 96), 255)
+    d = ImageDraw.Draw(im)
+    drawer(d)
+    out = io.BytesIO(); im.save(out, 'PNG')
+    return 'data:image/png;base64,' + base64.b64encode(out.getvalue()).decode()
+
+
+def test_papercut_is_deterministic_and_cuttable_contract():
+    req = PapercutRequest(seed=42, rows=6, cols=6, motif='star', min_bridge_mm=1.2)
+    a = generate_papercut(req); b = generate_papercut(req)
+    assert a['svg'] == b['svg']
+    assert a['recipe']['design_genome'].startswith('papercut:42')
+    assert a['machine_control'] is False
+    assert 'data-operation="cut"' in a['svg']
+    assert a['preflight']['component_count'] == 1
+
+
+def test_halftone_limits_hole_size_to_keep_web():
+    uri = png_uri(lambda d: d.rectangle((0,0,95,95), fill=0))
+    r = generate_halftone(HalftoneRequest(
+        image_data_uri=uri, width_mm=80, height_mm=80, margin_mm=4,
+        cell_mm=5, min_diameter_mm=.5, max_diameter_mm=9,
+        min_bridge_mm=1.5, shape='circle'
+    ))
+    assert r['recipe']['effective_max_diameter_mm'] < 9
+    assert r['preflight']['min_web_mm'] >= 1.45
+    assert any('limitado automáticamente' in w for w in r['warnings'])
+    assert r['preflight']['component_count'] == 1
+
+
+def test_stencil_auto_bridges_interior_island():
+    def draw(d):
+        d.ellipse((15,15,80,80), fill=0)
+        d.ellipse((35,35,60,60), fill=255)
+    r = generate_stencil(StencilRequest(
+        image_data_uri=png_uri(draw), width_mm=100, height_mm=100,
+        threshold=128, frame_mm=4, bridge_width_mm=2.0, sample_max_px=80,
+        max_auto_bridges=10, min_bridge_mm=.8,
+    ))
+    assert r['bridge_plan']['auto_bridges'] >= 1
+    assert r['bridge_plan']['remaining_islands'] == 0
+    assert r['preflight']['component_count'] == 1
+    assert 'layer_guides' in r['preview_svg']
+    assert 'layer_guides' not in r['svg']
+
+
+def test_bridge_coupon_is_reproducible_document_only():
+    r = generate_bridge_coupon(BridgeCouponRequest(widths_mm=[.6, 1.0, 1.5]))
+    assert r['kind'] == 'bridge-coupon'
+    assert r['machine_control'] is False
+    assert len(r['calibration_steps']) == 3
+    assert 'G0 ' not in r['svg'] and 'M3 ' not in r['svg']
+
+
+def test_capabilities_reserve_optional_providers_without_requiring_them():
+    c = capabilities()
+    assert c['engines']['papercut']['available'] is True
+    assert c['engines']['nesting']['available'] is False
+    assert c['openai_lab']['cut_survival_map'] is True
+
+
+def test_laser_design_frontend_contract_has_no_dangling_ids_or_machine_commands():
+    import re
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    html = (root / 'app/static/laser_design.html').read_text(encoding='utf-8')
+    js = (root / 'app/static/laser_design.js').read_text(encoding='utf-8')
+    referenced = set(re.findall(r"\$\(['\"]([A-Za-z0-9_-]+)['\"]\)", js))
+    ids = set(re.findall(r'\bid=["\']([^"\']+)["\']', html))
+    assert not (referenced - ids), sorted(referenced - ids)
+    for endpoint in ('/api/laser-design/papercut','/api/laser-design/halftone','/api/laser-design/stencil','/api/laser-design/openai-lab/bridge-coupon','/api/laser-design/openai-lab/material-passport'):
+        assert endpoint in js
+    assert 'G0 ' not in js and 'G1 ' not in js and 'M3 ' not in js and 'M4 ' not in js
+
+
+def test_material_dna_passport_is_deterministic_and_machine_independent():
+    req = MaterialPassportRequest(
+        bridge_widths_mm=[0.6, 1.0, 1.5],
+        hole_diameters_mm=[0.8, 1.2, 2.0],
+        gap_widths_mm=[0.6, 1.0, 1.5],
+    )
+    a = generate_material_passport(req)
+    b = generate_material_passport(req)
+    assert a["passport_id"] == b["passport_id"]
+    assert a["svg"] == b["svg"]
+    assert a["machine_control"] is False
+    assert a["interpretation"] == "CHARACTERIZATION_SHEET_NOT_PRODUCTION_PREFLIGHT"
+    zones = {row["zone"] for row in a["measurement_schema"]["rows"]}
+    assert zones == {"bridge", "hole", "gap"}
+    assert "power" not in str(a["measurement_schema"]).lower()
+    assert "G0 " not in a["svg"] and "M3 " not in a["svg"]
+
+
+def test_frontend_id_helper_is_never_called_with_css_selector():
+    import re
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    js = (root / 'app/static/laser_design.js').read_text(encoding='utf-8')
+    helper_args = re.findall(r"\$\(['\"]([^'\"]+)['\"]\)", js)
+    invalid = [value for value in helper_args if value.startswith(('.', '#', '[', ':'))]
+    assert invalid == [], f"getElementById helper received CSS selectors: {invalid}"
+
+
+def test_laser_design_routes_are_registered_in_fastapi():
+    from app.main import app
+    paths = {route.path for route in app.routes}
+    expected = {
+        "/laser-design",
+        "/api/laser-design/capabilities",
+        "/api/laser-design/papercut",
+        "/api/laser-design/halftone",
+        "/api/laser-design/stencil",
+        "/api/laser-design/openai-lab/bridge-coupon",
+        "/api/laser-design/openai-lab/material-passport",
+    }
+    assert expected <= paths, sorted(expected - paths)

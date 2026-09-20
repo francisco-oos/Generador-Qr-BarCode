@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Laser Design Studio · Experimental</title>
+  <link rel="stylesheet" href="/static/laser_design.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <a class="back" href="/">← Marking Studio</a>
+      <h1>Laser Design Studio <span class="badge">v0.9 experimental</span></h1>
+      <p>Diseña, convierte y valida geometría para corte. No controla la máquina.</p>
+    </div>
+    <div class="cap" id="capabilityState">Cargando capacidades…</div>
+  </header>
+
+  <main class="shell">
+    <section class="mode-strip" aria-label="Herramientas">
+      <button class="mode active" data-mode="papercut"><b>Papel picado</b><span>Patrones paramétricos</span></button>
+      <button class="mode" data-mode="halftone"><b>Foto → halftone</b><span>Perforaciones por tono</span></button>
+      <button class="mode" data-mode="stencil"><b>Foto → stencil</b><span>Puentes automáticos</span></button>
+      <button class="mode lab" data-mode="coupon"><b>OpenAI Lab</b><span>Cupón de supervivencia</span></button>
+      <button class="mode lab" data-mode="passport"><b>Material DNA</b><span>Caracterización física</span></button>
+    </section>
+
+    <section class="workflow">
+      <span class="done">1 · Elegir</span><span>2 · Ajustar</span><span>3 · Generar</span><span>4 · Preflight</span><span>5 · Exportar</span>
+    </section>
+
+    <section class="workspace">
+      <aside class="panel controls">
+        <div class="panel-head"><h2 id="toolTitle">Papel picado</h2><span id="toolHint">Generación reproducible</span></div>
+        <div class="group image-only" hidden>
+          <label>Imagen PNG/JPG</label>
+          <div class="dropzone" id="dropzone"><input id="imageInput" type="file" accept="image/png,image/jpeg" /><strong>Arrastra una imagen o pulsa aquí</strong><span>Se procesa localmente en Marking Studio.</span></div>
+          <div id="imageName" class="micro"></div>
+        </div>
+        <div class="group dims"><h3>Tamaño físico</h3><div class="two"><label>Ancho mm<input id="widthMm" type="number" value="180" min="20" step="1"></label><label>Alto mm<input id="heightMm" type="number" value="260" min="20" step="1"></label></div></div>
+        <div class="group papercut-only"><h3>Patrón</h3><label>Motivo<select id="motif"><option value="diamond">Diamante</option><option value="circle">Círculo</option><option value="hex">Hexágono</option><option value="star">Estrella</option><option value="heart">Corazón</option></select></label><div class="two"><label>Filas<input id="rows" type="number" value="8" min="2" max="40"></label><label>Columnas<input id="cols" type="number" value="6" min="2" max="40"></label></div><div class="two"><label>Densidad<input id="density" type="number" value="0.66" min="0.15" max="0.9" step="0.01"></label><label>Simetría<select id="symmetry"><option value="mirror">Espejo</option><option value="grid">Cuadrícula</option></select></label></div><label>Semilla reproducible<input id="seed" type="number" value="1" min="0"></label></div>
+        <div class="group halftone-only" hidden><h3>Halftone</h3><div class="two"><label>Celda mm<input id="cellMm" type="number" value="4" min="0.5" step="0.1"></label><label>Puente mínimo mm<input id="halftoneBridge" type="number" value="0.8" min="0.1" step="0.1"></label></div><div class="two"><label>Diám. mín.<input id="minDiameter" type="number" value="0.6" min="0.1" step="0.1"></label><label>Diám. máx.<input id="maxDiameter" type="number" value="3" min="0.2" step="0.1"></label></div><div class="two"><label>Forma<select id="halftoneShape"><option value="circle">Círculo</option><option value="diamond">Diamante</option><option value="hex">Hexágono</option></select></label><label>Gamma<input id="gamma" type="number" value="1" min="0.2" max="5" step="0.1"></label></div><label class="check"><input id="halftoneInvert" type="checkbox"> Invertir tonos</label></div>
+        <div class="group stencil-only" hidden><h3>Stencil inteligente</h3><div class="two"><label>Umbral<input id="threshold" type="number" value="140" min="0" max="255"></label><label>Marco mm<input id="frameMm" type="number" value="4" min="0.5" step="0.1"></label></div><div class="two"><label>Ancho puente mm<input id="bridgeWidth" type="number" value="1.8" min="0.2" step="0.1"></label><label>Máx. puentes<input id="maxBridges" type="number" value="40" min="0" max="200"></label></div><label class="check"><input id="stencilInvert" type="checkbox"> Invertir claro/oscuro</label></div>
+        <div class="group coupon-only" hidden><h3>OpenAI · Bridge Ladder</h3><p class="micro">Genera un cupón sacrificial para descubrir el ancho de puente que realmente sobrevive en tu material y proceso.</p><label>Anchos a probar (mm)<input id="couponWidths" value="0.4, 0.6, 0.8, 1.0, 1.2, 1.5, 1.8, 2.0, 2.5, 3.0"></label><div class="two"><label>Longitud mm<input id="couponLength" type="number" value="24" min="8" step="1"></label><label>Separación mm<input id="couponGap" type="number" value="4" min="1" step="0.5"></label></div></div>
+        <div class="group passport-only" hidden><h3>OpenAI · Material DNA Passport</h3><p class="micro">Una hoja sacrificial mide tres límites del proceso. Los valores no son recetas de potencia: son restricciones geométricas observadas.</p><label>Puentes a probar (mm)<input id="passportBridges" value="0.5, 0.7, 0.9, 1.2, 1.5, 2.0, 2.5"></label><label>Agujeros a probar (mm)<input id="passportHoles" value="0.5, 0.8, 1.0, 1.5, 2.0, 3.0, 4.0"></label><label>Separaciones a probar (mm)<input id="passportGaps" value="0.5, 0.7, 0.9, 1.2, 1.5, 2.0, 2.5"></label><div class="two"><label>Alto fila mm<input id="passportRowHeight" type="number" value="10" min="6" step="0.5"></label><label>Largo muestra mm<input id="passportFeatureLength" type="number" value="22" min="8" step="1"></label></div><div id="passportSummary" class="micro"></div></div>
+        <div class="group common-only"><h3>Seguridad geométrica</h3><div class="two"><label>Margen mm<input id="marginMm" type="number" value="8" min="0.5" step="0.5"></label><label>Objetivo puente mm<input id="minBridge" type="number" value="1.5" min="0.1" step="0.1"></label></div></div>
+        <button id="generateBtn" class="primary">Generar + validar</button><div id="formMessage" class="message"></div>
+      </aside>
+      <section class="panel preview-panel"><div class="panel-head"><h2>Vista previa</h2><div class="toggle"><label><input id="showGuides" type="checkbox" checked> mostrar guías</label></div></div><div class="preview" id="preview"><div class="empty">Elige una herramienta y genera el primer diseño.</div></div><div class="preview-actions"><button id="downloadSvg" disabled>Descargar SVG de corte</button><button id="downloadPreview" disabled>Descargar SVG con guías</button></div><p class="micro">El SVG de corte sólo contiene geometría de documento. LightBurn/Sculpfun Space/LaserGRBL siguen siendo responsables del control de máquina.</p></section>
+      <aside class="panel inspector"><div class="panel-head"><h2>Preflight físico</h2><span class="status idle" id="statusBadge">SIN ANALIZAR</span></div><div class="metrics"><div><span>Una sola pieza</span><b id="componentMetric">—</b></div><div><span>Puente mínimo</span><b id="webMetric">—</b></div><div><span>Área retirada</span><b id="areaMetric">—</b></div><div><span>Escala segura</span><b id="scaleMetric">—</b></div></div><h3>Diagnóstico</h3><ul id="issues" class="issues"><li>Genera un diseño para ver riesgos.</li></ul><div class="labbox"><h3>OpenAI Experimental Lab</h3><p><b>Cut Survival Map</b> busca puntos donde el material queda demasiado estrecho.</p><p><b>Safe Scale Guard</b> calcula cuánto tendría que ampliarse un diseño para respetar tu puente mínimo.</p><p><b>Design Genome</b> guarda los parámetros/semilla para reproducir exactamente el diseño.</p><p><b>Adaptive Bridge Planner</b> conecta automáticamente islas detectadas en stencils.</p><p><b>Material DNA</b> convierte pruebas sacrificiales en límites geométricos medibles y reproducibles.</p><p><b>Self-Guarding Geometry</b> adapta el diseño antes de exportar cuando una restricción física conocida sería violada.</p></div><details><summary>Receta reproducible</summary><pre id="recipeOut">—</pre></details></aside>
+    </section>
+  </main>
+  <script src="/static/laser_design.js"></script>
+</body>
+</html>

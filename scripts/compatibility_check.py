@@ -44,7 +44,7 @@ def check(name, fn):
 
 def package_versions():
     result = {}
-    for module in ("fastapi", "uvicorn", "pydantic", "reportlab", "qrcode", "PIL", "cryptography"):
+    for module in ("fastapi", "uvicorn", "pydantic", "reportlab", "qrcode", "PIL", "cryptography", "shapely"):
         m = importlib.import_module(module)
         result[module] = getattr(m, "__version__", getattr(m, "VERSION", "installed"))
     try:
