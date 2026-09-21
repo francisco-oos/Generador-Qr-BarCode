@@ -323,3 +323,40 @@ def test_frame_and_jog_never_emit_laser_power_commands():
     assert moved["laser_enabled"] is False
     assert JogTransport.instances[-1].lines == ["$J=G91 X10 Y-5 F1200"]
     assert not any(token in moved["command"] for token in ("M3", "M4", " S"))
+
+
+# WHY: En corte, una plantilla con borde exterior y detalles debe terminar por el contorno grande para no liberar la pieza antes de tiempo.
+def test_cut_orders_small_closed_paths_before_outer_border():
+    from app.machine_control import JOB_STORE, _path_area_mm2
+
+    preset_id = validated_preset("cut", power=55, interval=None, laser_mode="M3")
+    machine = load_machines()["sculpfun_s9_pro_10w"]
+    svg = generate_process_template("cut_papercut_panel", 80, 60)["svg"]
+    result = prepare_machine_job(svg=svg, machine=machine, material_preset_id=preset_id, operation="cut")
+    job = JOB_STORE.get(result["job_id"])
+    areas = [_path_area_mm2(path) for path in job.paths if path[0] == path[-1]]
+    assert len(areas) > 2
+    assert areas == sorted(areas)
+    assert areas[-1] > areas[-2] * 5
+
+
+# WHY: DRAINING todavía representa movimiento físico posible; pausa y aborto deben seguir disponibles hasta GRBL Idle.
+def test_pause_and_abort_are_available_while_draining():
+    class RealtimeOnly:
+        def __init__(self):
+            self.payloads = []
+        def send_realtime(self, payload):
+            self.payloads.append(payload)
+
+    transport = RealtimeOnly()
+    service = GrblControlService()
+    service._transport = transport
+    service._state = "DRAINING"
+    paused = service.pause()
+    assert paused["state"] == "HOLD"
+    assert transport.payloads == [b"!"]
+
+    service._state = "DRAINING"
+    aborted = service.abort()
+    assert aborted["state"] == "ABORTED"
+    assert transport.payloads[-2:] == [b"!", b"\x18"]
