@@ -30,7 +30,7 @@ def api_static_fallback() -> dict:
     result: dict[str, object] = {}
     with TestClient(app) as client:
         health = client.get("/api/health")
-        result["health"] = health.status_code == 200 and health.json().get("version") == "0.9.0"
+        result["health"] = health.status_code == 200 and health.json().get("version") == "0.10.0"
         index = client.get("/")
         text = index.text
         result["index"] = index.status_code == 200
@@ -50,6 +50,26 @@ def api_static_fallback() -> dict:
             passport.status_code == 200
             and str(passport.json().get("passport_id", "")).startswith("MDNA-")
             and passport.json().get("machine_control") is False
+        )
+        control_caps = client.get("/api/machine/control/capabilities")
+        result["direct_control_capabilities"] = (
+            control_caps.status_code == 200
+            and control_caps.json().get("direct_control") is True
+            and control_caps.json().get("validated_preset_required") is True
+            and control_caps.json().get("automatic_firmware_writes") is False
+        )
+        process_template = client.post("/api/machine/control/process-template", json={
+            "template_id": "cut_geometry_coupon", "width_mm": 60, "height_mm": 40
+        })
+        result["direct_control_process_template"] = (
+            process_template.status_code == 200
+            and process_template.json().get("contains_machine_parameters") is False
+            and "<svg" in process_template.json().get("svg", "")
+        )
+        control_state = client.get("/api/machine/control/status")
+        result["direct_control_idle_state"] = (
+            control_state.status_code == 200
+            and control_state.json().get("state") in {"IDLE", "COMPLETE", "ABORTED", "ERROR"}
         )
         catalog = client.get("/api/catalog")
         result["catalog"] = catalog.status_code == 200 and len(catalog.json().get("templates", [])) >= 5
