@@ -452,7 +452,21 @@ class SerialGrblTransport:
             self.ser.write(payload)
             self.ser.flush()
 
-    # WHY: Lee $I/$$ en la misma conexión que ejecutará el job para evitar usar un diagnóstico obsoleto.
+    # WHY: Consulta el estado real GRBL para distinguir líneas aceptadas de movimiento físicamente terminado.
+    def query_status(self) -> dict[str, Any]:
+        self.send_realtime(b"?")
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            raw = self.ser.readline()
+            if not raw:
+                continue
+            text = raw.decode("utf-8", errors="replace").strip()
+            if text.startswith("<") and text.endswith(">"):
+                state = text[1:-1].split("|", 1)[0]
+                return {"raw": text, "state": state}
+        raise TimeoutError("GRBL no respondió al status '?'")
+
+    # WHY: Lee $I/$ en la misma conexión que ejecutará el job para evitar usar un diagnóstico obsoleto.
     def query_controller(self) -> dict[str, Any]:
         try:
             self.ser.reset_input_buffer()
@@ -570,7 +584,28 @@ class GrblControlService:
                 transport.send_line(line)
                 with self._lock:
                     self._line_index = idx
-                    self._progress = idx / max(1, len(lines))
+                    # 99 % significa transmitido; 100 % se reserva para GRBL Idle real.
+                    self._progress = min(0.99, (idx / max(1, len(lines))) * 0.99)
+            with self._lock:
+                self._state = "DRAINING"
+            deadline = time.monotonic() + 6 * 60 * 60
+            while time.monotonic() < deadline:
+                if self._abort.is_set():
+                    raise InterruptedError("Trabajo abortado por operador")
+                machine_status = transport.query_status()
+                state = str(machine_status.get("state") or "")
+                if state == "Idle":
+                    break
+                if state.startswith("Alarm"):
+                    raise RuntimeError(f"GRBL terminó en estado {state}")
+                with self._lock:
+                    if state == "Hold":
+                        self._state = "HOLD"
+                    elif self._state != "HOLD":
+                        self._state = "DRAINING"
+                time.sleep(0.15)
+            else:
+                raise TimeoutError("El job fue transmitido pero GRBL no regresó a Idle")
             with self._lock:
                 self._state = "COMPLETE"
                 self._progress = 1.0
@@ -579,8 +614,11 @@ class GrblControlService:
                 self._state = "ABORTED"
         except Exception as exc:
             with self._lock:
-                self._state = "ERROR"
-                self._error = str(exc)
+                if self._abort.is_set():
+                    self._state = "ABORTED"
+                else:
+                    self._state = "ERROR"
+                    self._error = str(exc)
             if transport is not None:
                 try:
                     transport.send_realtime(b"!")
