@@ -92,7 +92,43 @@ def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
-# WHY: Convierte un path SVG lineal en subpaths independientes para preservar rectángulos compuestos de QR/barcodes.
+# WHY: Mide separación perpendicular punto-línea para decidir cuándo una curva ya puede representarse físicamente por un segmento.
+def _point_line_distance(p: tuple[float, float], a: tuple[float, float], b: tuple[float, float]) -> float:
+    ax, ay = a; bx, by = b; px, py = p
+    dx, dy = bx-ax, by-ay
+    denom = math.hypot(dx, dy)
+    if denom <= 1e-12:
+        return math.hypot(px-ax, py-ay)
+    return abs(dy*px - dx*py + bx*ay - by*ax) / denom
+
+
+# WHY: Aplana Bézier cuadrática adaptativamente a una tolerancia física en milímetros sin depender del zoom o DPI.
+def _flatten_quadratic(p0: tuple[float, float], p1: tuple[float, float], p2: tuple[float, float],
+                       tolerance_mm: float = 0.05, depth: int = 0) -> list[tuple[float, float]]:
+    if depth >= 12 or _point_line_distance(p1, p0, p2) <= tolerance_mm:
+        return [p2]
+    p01=((p0[0]+p1[0])/2,(p0[1]+p1[1])/2)
+    p12=((p1[0]+p2[0])/2,(p1[1]+p2[1])/2)
+    mid=((p01[0]+p12[0])/2,(p01[1]+p12[1])/2)
+    return _flatten_quadratic(p0,p01,mid,tolerance_mm,depth+1)+_flatten_quadratic(mid,p12,p2,tolerance_mm,depth+1)
+
+
+# WHY: Aplana Bézier cúbica adaptativamente para conservar texto/logos vectoriales sin entregar curvas opacas al streamer GRBL.
+def _flatten_cubic(p0: tuple[float, float], p1: tuple[float, float], p2: tuple[float, float],
+                   p3: tuple[float, float], tolerance_mm: float = 0.05, depth: int = 0) -> list[tuple[float, float]]:
+    flat=max(_point_line_distance(p1,p0,p3),_point_line_distance(p2,p0,p3))
+    if depth >= 12 or flat <= tolerance_mm:
+        return [p3]
+    p01=((p0[0]+p1[0])/2,(p0[1]+p1[1])/2)
+    p12=((p1[0]+p2[0])/2,(p1[1]+p2[1])/2)
+    p23=((p2[0]+p3[0])/2,(p2[1]+p3[1])/2)
+    p012=((p01[0]+p12[0])/2,(p01[1]+p12[1])/2)
+    p123=((p12[0]+p23[0])/2,(p12[1]+p23[1])/2)
+    mid=((p012[0]+p123[0])/2,(p012[1]+p123[1])/2)
+    return _flatten_cubic(p0,p01,p012,mid,tolerance_mm,depth+1)+_flatten_cubic(mid,p123,p23,p3,tolerance_mm,depth+1)
+
+
+# WHY: Convierte paths SVG en subpaths lineales independientes y aplana Bézier para conservar texto/QR/barcodes completos.
 def _parse_linear_path(d: str) -> list[tuple[list[tuple[float, float]], bool]]:
     tokens = _TOKEN_RE.findall(d or "")
     if not tokens:
@@ -103,6 +139,8 @@ def _parse_linear_path(d: str) -> list[tuple[list[tuple[float, float]], bool]]:
     cmd = ""
     x = y = 0.0
     start: tuple[float, float] | None = None
+    previous_cmd = ""
+    last_control: tuple[float, float] | None = None
 
     # WHY: Consume un número del token stream con mensaje de error uniforme.
     def number() -> float:
@@ -114,6 +152,11 @@ def _parse_linear_path(d: str) -> list[tuple[list[tuple[float, float]], bool]]:
             raise ValueError("Coordenada SVG no finita")
         i += 1
         return value
+
+    # WHY: Resuelve una coordenada absoluta/relativa contra el punto actual antes de modificarlo.
+    def pair(relative: bool, base_x: float, base_y: float) -> tuple[float, float]:
+        nx, ny = number(), number()
+        return (base_x + nx, base_y + ny) if relative else (nx, ny)
 
     # WHY: Finaliza el subpath actual sin unirlo accidentalmente al siguiente movimiento M.
     def finish(closed: bool) -> None:
@@ -134,45 +177,69 @@ def _parse_linear_path(d: str) -> list[tuple[list[tuple[float, float]], bool]]:
             cmd = next_cmd
         if not cmd:
             raise ValueError("Path SVG sin comando inicial")
-        if cmd in {"C", "c", "Q", "q", "A", "a", "S", "s", "T", "t"}:
-            raise ValueError(f"Comando SVG {cmd} no soportado para control directo; convierta a segmentos lineales")
+        if cmd in {"A", "a"}:
+            raise ValueError("Arcos SVG A/a no están habilitados para control directo; conviértalos a curvas/segmentos")
         if cmd in {"Z", "z"}:
             if start is not None and points and points[-1] != start:
                 points.append(start)
+            if start is not None:
+                x, y = start
             finish(True)
-            cmd = ""
+            previous_cmd, last_control, cmd = cmd, None, ""
             continue
         if cmd in {"M", "m", "L", "l"}:
-            nx, ny = number(), number()
-            if cmd.islower():
-                nx, ny = x + nx, y + ny
+            nx, ny = pair(cmd.islower(), x, y)
             x, y = nx, ny
             if not points:
                 start = (x, y)
             points.append((x, y))
+            previous_cmd, last_control = cmd, None
             if cmd in {"M", "m"}:
                 cmd = "L" if cmd == "M" else "l"
             continue
         if cmd in {"H", "h"}:
             nx = number()
             x = x + nx if cmd == "h" else nx
-            if not points:
-                start = (x, y)
-            points.append((x, y))
+            if not points: start = (x, y)
+            points.append((x, y)); previous_cmd, last_control = cmd, None
             continue
         if cmd in {"V", "v"}:
             ny = number()
             y = y + ny if cmd == "v" else ny
-            if not points:
-                start = (x, y)
-            points.append((x, y))
+            if not points: start = (x, y)
+            points.append((x, y)); previous_cmd, last_control = cmd, None
+            continue
+        if cmd in {"Q", "q"}:
+            p0=(x,y); p1=pair(cmd.islower(),x,y); p2=pair(cmd.islower(),x,y)
+            points.extend(_flatten_quadratic(p0,p1,p2))
+            x,y=p2; previous_cmd, last_control=cmd,p1
+            continue
+        if cmd in {"T", "t"}:
+            p0=(x,y)
+            p1=(2*x-last_control[0],2*y-last_control[1]) if previous_cmd in {"Q","q","T","t"} and last_control else p0
+            p2=pair(cmd.islower(),x,y)
+            points.extend(_flatten_quadratic(p0,p1,p2))
+            x,y=p2; previous_cmd, last_control=cmd,p1
+            continue
+        if cmd in {"C", "c"}:
+            p0=(x,y); p1=pair(cmd.islower(),x,y); p2=pair(cmd.islower(),x,y); p3=pair(cmd.islower(),x,y)
+            points.extend(_flatten_cubic(p0,p1,p2,p3))
+            x,y=p3; previous_cmd, last_control=cmd,p2
+            continue
+        if cmd in {"S", "s"}:
+            p0=(x,y)
+            p1=(2*x-last_control[0],2*y-last_control[1]) if previous_cmd in {"C","c","S","s"} and last_control else p0
+            p2=pair(cmd.islower(),x,y); p3=pair(cmd.islower(),x,y)
+            points.extend(_flatten_cubic(p0,p1,p2,p3))
+            x,y=p3; previous_cmd, last_control=cmd,p2
             continue
         raise ValueError(f"Comando SVG no soportado: {cmd}")
     if points:
         finish(False)
     if not result:
-        raise ValueError("Path SVG sin geometría lineal")
+        raise ValueError("Path SVG sin geometría")
     return result
+
 
 # WHY: Recorre SVG saneado, ignora capas de guía y rechaza construcciones que impedirían conocer la geometría física exacta.
 def extract_linear_svg_paths(svg: str) -> tuple[list[list[tuple[float, float]]], list[bool]]:
