@@ -41,13 +41,14 @@ El compilador directo acepta SVG aplanado con:
 - `g`;
 - `path`;
 - `metadata/title/desc` (metadata se ignora para toolpath);
-- comandos de path lineales M/L/H/V/Z, absolutos o relativos.
+- comandos M/L/H/V/Z, absolutos o relativos;
+- curvas Bézier Q/C/S/T aplanadas adaptativamente a segmentos con tolerancia geométrica de 0.05 mm.
 
-Los paths compuestos se separan en subpaths independientes. Esto es indispensable para QR/Code128, donde muchos módulos viven dentro de un solo atributo `d`.
+Los paths compuestos se separan en subpaths independientes. Esto es indispensable para QR/Code128, donde muchos módulos viven dentro de un solo atributo `d`. Los contornos de texto TrueType convertidos a Q/C se aplanan antes del streaming; nunca se envía una curva opaca a GRBL.
 
 Se rechazan:
 
-- C/Q/A/S/T (curvas/arcos sin discretización validada);
+- arcos elípticos A/a (siguen bloqueados hasta una discretización específica auditada);
 - transforms;
 - scripts, use, foreignObject, imágenes u otros elementos no lineales;
 - coordenadas fuera de la cama declarada;
