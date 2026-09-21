@@ -92,17 +92,17 @@ def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
-# WHY: Convierte un path SVG lineal a puntos absolutos y rechaza curvas/arc que aún no tienen discretización auditada.
-def _parse_linear_path(d: str) -> tuple[list[tuple[float, float]], bool]:
+# WHY: Convierte un path SVG lineal en subpaths independientes para preservar rectángulos compuestos de QR/barcodes.
+def _parse_linear_path(d: str) -> list[tuple[list[tuple[float, float]], bool]]:
     tokens = _TOKEN_RE.findall(d or "")
     if not tokens:
         raise ValueError("Path SVG vacío")
+    result: list[tuple[list[tuple[float, float]], bool]] = []
     points: list[tuple[float, float]] = []
     i = 0
     cmd = ""
     x = y = 0.0
     start: tuple[float, float] | None = None
-    closed = False
 
     # WHY: Consume un número del token stream con mensaje de error uniforme.
     def number() -> float:
@@ -115,10 +115,23 @@ def _parse_linear_path(d: str) -> tuple[list[tuple[float, float]], bool]:
         i += 1
         return value
 
+    # WHY: Finaliza el subpath actual sin unirlo accidentalmente al siguiente movimiento M.
+    def finish(closed: bool) -> None:
+        nonlocal points, start
+        if points:
+            if len(points) < 2:
+                raise ValueError("Subpath SVG necesita al menos dos puntos")
+            result.append((points, closed))
+        points = []
+        start = None
+
     while i < len(tokens):
         if tokens[i].isalpha():
-            cmd = tokens[i]
+            next_cmd = tokens[i]
             i += 1
+            if next_cmd in {"M", "m"} and points:
+                finish(False)
+            cmd = next_cmd
         if not cmd:
             raise ValueError("Path SVG sin comando inicial")
         if cmd in {"C", "c", "Q", "q", "A", "a", "S", "s", "T", "t"}:
@@ -126,7 +139,7 @@ def _parse_linear_path(d: str) -> tuple[list[tuple[float, float]], bool]:
         if cmd in {"Z", "z"}:
             if start is not None and points and points[-1] != start:
                 points.append(start)
-            closed = True
+            finish(True)
             cmd = ""
             continue
         if cmd in {"M", "m", "L", "l"}:
@@ -134,27 +147,32 @@ def _parse_linear_path(d: str) -> tuple[list[tuple[float, float]], bool]:
             if cmd.islower():
                 nx, ny = x + nx, y + ny
             x, y = nx, ny
-            points.append((x, y))
-            if start is None or cmd in {"M", "m"} and len(points) == 1:
+            if not points:
                 start = (x, y)
+            points.append((x, y))
             if cmd in {"M", "m"}:
                 cmd = "L" if cmd == "M" else "l"
             continue
         if cmd in {"H", "h"}:
             nx = number()
             x = x + nx if cmd == "h" else nx
+            if not points:
+                start = (x, y)
             points.append((x, y))
             continue
         if cmd in {"V", "v"}:
             ny = number()
             y = y + ny if cmd == "v" else ny
+            if not points:
+                start = (x, y)
             points.append((x, y))
             continue
         raise ValueError(f"Comando SVG no soportado: {cmd}")
-    if len(points) < 2:
-        raise ValueError("Path SVG necesita al menos dos puntos")
-    return points, closed
-
+    if points:
+        finish(False)
+    if not result:
+        raise ValueError("Path SVG sin geometría lineal")
+    return result
 
 # WHY: Recorre SVG saneado, ignora capas de guía y rechaza construcciones que impedirían conocer la geometría física exacta.
 def extract_linear_svg_paths(svg: str) -> tuple[list[list[tuple[float, float]]], list[bool]]:
@@ -177,11 +195,11 @@ def extract_linear_svg_paths(svg: str) -> tuple[list[list[tuple[float, float]]],
             return
         if name == "path":
             d = node.attrib.get("d", "")
-            pts, is_closed = _parse_linear_path(d)
-            paths.append(pts)
-            closed.append(is_closed)
-            if len(paths) > MAX_SVG_PATHS:
-                raise ValueError("Demasiados paths SVG para control directo")
+            for pts, is_closed in _parse_linear_path(d):
+                paths.append(pts)
+                closed.append(is_closed)
+                if len(paths) > MAX_SVG_PATHS:
+                    raise ValueError("Demasiados paths SVG para control directo")
         for child in list(node):
             visit(child, operation)
 
