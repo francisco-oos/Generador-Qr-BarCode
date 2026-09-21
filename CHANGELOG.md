@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.10.0 — experimental direct GRBL control
+
+- Adds an opt-in GRBL 1.1 controller for the SCULPFUN S9 Pro profile while retaining external LightBurn/Sculpfun Space/LaserGRBL handoff.
+- Compiles sanitized linear SVG into opaque internal jobs; arbitrary browser-supplied G-code is not accepted.
+- Requires a locally validated preset captured for the same machine/surface before compiling a runnable job.
+- Adds cut, line engraving and fill/hatch engraving; fill spacing comes from the validated preset.
+- Requires laser-off Frame on the same serial port before Start and three physical confirmations before execution.
+- Re-reads GRBL `$I`/`$`, requires `$32=1` and valid `$30`, and never writes controller settings automatically.
+- Adds realtime pause/resume/abort plus laser-off incremental `$J` jog.
+- Marks jobs COMPLETE only after GRBL reports `Idle` after streaming.
+- Adds process SVG samples for line engraving, fill engraving, cut geometry and papel picado.
+- Adds direct compilation coverage for the existing INOVA Code128 production SVG.
+- Physical SCULPFUN/material acceptance remains pending; CI uses a simulated GRBL transport.
+
 ## 0.9.0 — experimental Laser Design Studio
 
 - Adds parametric papel picado generation.
@@ -7,7 +21,8 @@
 - Adds raster-to-stencil conversion with automatic material bridges.
 - Adds manufacturability preflight and minimum safe-scale calculation.
 - Adds separate `/laser-design` guided UI.
-- Adds OpenAI Experimental Lab Bridge Ladder coupon and reproducible Design Genome.\n- Adds Material DNA Passport for sacrificial bridge/hole/gap characterization and Self-Guarding Geometry constraints.
+- Adds OpenAI Experimental Lab Bridge Ladder coupon and reproducible Design Genome.
+- Adds Material DNA Passport for sacrificial bridge/hole/gap characterization and Self-Guarding Geometry constraints.
 - Keeps all machine control outside Marking Studio.
 
 ## 0.8.0 — 2026-09-13
