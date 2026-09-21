@@ -227,3 +227,29 @@ def test_compound_barcode_path_is_split_into_independent_subpaths():
     assert closed == [True, True]
     assert paths[0][0] == paths[0][-1] == (1.0, 1.0)
     assert paths[1][0] == paths[1][-1] == (5.0, 1.0)
+
+
+# WHY: Demuestra que la evolución controla también los SVG de identificación existentes y no sólo los nuevos diseños decorativos.
+def test_existing_code128_production_svg_can_compile_for_direct_engraving():
+    preset_id = validated_preset("engrave", power=18, interval=0.8, laser_mode="M4")
+    with TestClient(app) as client:
+        rendered = client.post("/api/render", json={
+            "template_id": "inova_quantum_code128_v1",
+            "data": {"manufacturer_id": "525499"},
+            "capture_mode": "manual",
+            "output": "svg",
+            "svg_mode": "production",
+            "text_as_paths": True,
+        })
+        assert rendered.status_code == 200, rendered.text
+        svg = rendered.json()["svg"]
+        paths, _ = extract_linear_svg_paths(svg)
+        assert len(paths) > 10
+        compiled = client.post("/api/machine/control/compile", json={
+            "svg": svg,
+            "machine_profile_id": "sculpfun_s9_pro_10w",
+            "material_preset_id": preset_id,
+            "operation": "line_engrave",
+        })
+        assert compiled.status_code == 200, compiled.text
+        assert compiled.json()["path_count"] >= len(paths)
