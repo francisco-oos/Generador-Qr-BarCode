@@ -35,7 +35,6 @@ from .db import (
     init_db,
     machine_captures,
     material_preset_by_id,
-    material_preset_control_context,
     material_presets,
     record_job,
     record_machine_capture,
@@ -117,7 +116,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="Server Oficina Marking Studio",
     version=VERSION,
-    description="Generador de identificación física para nodos, teléfonos y activos.",
+    description="Identificación, diseño láser y control GRBL experimental para nodos, teléfonos y activos.",
     lifespan=lifespan,
 )
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
