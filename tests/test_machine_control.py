@@ -145,6 +145,9 @@ def test_control_service_frames_then_streams_generated_job_only():
         def send_realtime(self, payload):
             self.realtime.append(payload)
 
+        def query_status(self):
+            return {"raw": "<Idle|MPos:0,0,0>", "state": "Idle"}
+
         def close(self):
             pass
 
