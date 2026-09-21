@@ -38,15 +38,25 @@ def validated_preset(operation: str, *, power: float = 30, interval: float | Non
     return stored["material_preset_ids"][0]
 
 
-# WHY: Verifica que el parser acepte sólo geometría lineal físicamente explícita y cierre correctamente contornos.
-def test_linear_svg_parser_accepts_marking_studio_paths_and_rejects_curves():
+# WHY: Verifica líneas y Bézier aplanadas, pero mantiene bloqueados transforms y arcos aún no auditados.
+def test_svg_parser_accepts_lines_and_flattens_bezier_but_rejects_unsafe_constructs():
     svg = '<svg xmlns="http://www.w3.org/2000/svg"><g data-operation="cut"><path d="M 1 1 L 9 1 L 9 9 L 1 9 Z"/></g></svg>'
     paths, closed = extract_linear_svg_paths(svg)
     assert closed == [True]
     assert paths[0][0] == (1.0, 1.0)
     assert paths[0][-1] == (1.0, 1.0)
-    with pytest.raises(ValueError, match="no soportado"):
-        extract_linear_svg_paths('<svg xmlns="http://www.w3.org/2000/svg"><path d="M 0 0 C 1 1 2 2 3 3"/></svg>')
+
+    cubic, _ = extract_linear_svg_paths('<svg xmlns="http://www.w3.org/2000/svg"><path d="M 0 0 C 0 5 5 5 5 0"/></svg>')
+    assert len(cubic[0]) > 2
+    assert cubic[0][0] == (0.0, 0.0)
+    assert cubic[0][-1] == (5.0, 0.0)
+
+    quadratic, _ = extract_linear_svg_paths('<svg xmlns="http://www.w3.org/2000/svg"><path d="M 0 0 Q 2.5 5 5 0"/></svg>')
+    assert len(quadratic[0]) > 2
+    assert quadratic[0][-1] == (5.0, 0.0)
+
+    with pytest.raises(ValueError, match="Arcos SVG"):
+        extract_linear_svg_paths('<svg xmlns="http://www.w3.org/2000/svg"><path d="M 0 0 A 5 5 0 0 1 10 10"/></svg>')
     with pytest.raises(ValueError, match="Transformaciones"):
         extract_linear_svg_paths('<svg xmlns="http://www.w3.org/2000/svg"><g transform="translate(1 1)"><path d="M 0 0 L 2 2"/></g></svg>')
 
