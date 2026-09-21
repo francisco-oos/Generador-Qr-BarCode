@@ -122,3 +122,22 @@ Cuando Marking Studio se conecte a Tracking Core, la estación de grabado deber�
 5. devuelve resultado, plantilla, preset, operador, estación y hashes.
 
 No es necesario exponer directamente el USB del láser al servidor central.
+
+
+## Ruta experimental v0.10: control GRBL directo
+
+La ruta histórica por archivo permanece soportada y es la referencia estable. La rama v0.10 agrega una alternativa **experimental** en Laser Design Studio para el perfil SCULPFUN S9 Pro:
+
+1. producir o cargar geometría saneada;
+2. seleccionar un preset local marcado como validado en la misma máquina/superficie;
+3. compilar un job interno;
+4. seleccionar el puerto serial;
+5. ejecutar Frame con M5;
+6. verificar físicamente límites/material/protección;
+7. Start;
+8. supervisar RUNNING/HOLD/DRAINING hasta GRBL Idle;
+9. escanear/verificar cuando aplique.
+
+El navegador no envía G-code libre. El backend genera las órdenes desde geometría validada y reconsulta $I/$$ antes de una ejecución energizada. No escribe automáticamente $30, $32, pasos/mm, homing ni límites.
+
+LightBurn, Sculpfun Space y LaserGRBL continúan disponibles en paralelo y no dependen de esta función experimental.
