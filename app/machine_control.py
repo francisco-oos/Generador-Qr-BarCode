@@ -288,6 +288,20 @@ def _bounds(paths: list[list[tuple[float, float]]]) -> tuple[float, float, float
     return min(xs), min(ys), max(xs), max(ys)
 
 
+# WHY: Calcula área de un contorno para ordenar cortes pequeños/internos antes del contorno exterior y reducir desplazamientos de pieza.
+def _path_area_mm2(path: list[tuple[float, float]]) -> float:
+    if len(path) < 4 or path[0] != path[-1]:
+        return 0.0
+    return abs(sum(x1*y2 - x2*y1 for (x1,y1),(x2,y2) in zip(path, path[1:])) / 2.0)
+
+
+# WHY: Ordena líneas abiertas primero y contornos cerrados de menor a mayor área, dejando normalmente el borde exterior para el final.
+def _order_cut_paths(paths: list[list[tuple[float, float]]], closed: list[bool]) -> tuple[list[list[tuple[float, float]]], list[bool]]:
+    items=list(zip(paths,closed))
+    items.sort(key=lambda item: (1 if item[1] else 0, _path_area_mm2(item[0]) if item[1] else 0.0))
+    return [p for p,_ in items],[c for _,c in items]
+
+
 # WHY: Convierte contornos cerrados en barrido lineal para grabado fill manteniendo el intervalo validado del preset.
 def _hatch_paths(paths: list[list[tuple[float, float]]], closed: list[bool], interval_mm: float) -> tuple[list[list[tuple[float, float]]], list[bool]]:
     if interval_mm <= 0:
@@ -380,6 +394,8 @@ def prepare_machine_job(
     paths, closed = extract_linear_svg_paths(svg)
     if operation == "fill_engrave":
         paths, closed = _hatch_paths(paths, closed, interval or 0.0)
+    elif operation == "cut":
+        paths, closed = _order_cut_paths(paths, closed)
     shifted = [[(x + offset_x_mm, y + offset_y_mm) for x, y in path] for path in paths]
     b = _bounds(shifted)
     if b[0] < -1e-6 or b[1] < -1e-6:
@@ -721,8 +737,8 @@ class GrblControlService:
     # WHY: Usa feed-hold real-time de GRBL para detener movimiento planificado sin perder inmediatamente el job.
     def pause(self) -> dict[str, Any]:
         with self._lock:
-            if self._state != "RUNNING" or self._transport is None:
-                raise ValueError("No hay trabajo RUNNING para pausar")
+            if self._state not in {"RUNNING", "DRAINING"} or self._transport is None:
+                raise ValueError("No hay trabajo RUNNING/DRAINING para pausar")
             self._transport.send_realtime(b"!")
             self._state = "HOLD"
             return self.status()
@@ -739,7 +755,7 @@ class GrblControlService:
     # WHY: Prioriza apagar/detener inmediatamente mediante hold + soft-reset y marca el job como abortado.
     def abort(self) -> dict[str, Any]:
         with self._lock:
-            if self._transport is None or self._state not in {"RUNNING", "HOLD", "STARTING"}:
+            if self._transport is None or self._state not in {"RUNNING", "HOLD", "STARTING", "DRAINING"}:
                 raise ValueError("No hay trabajo activo para abortar")
             self._abort.set()
             self._transport.send_realtime(b"!")
