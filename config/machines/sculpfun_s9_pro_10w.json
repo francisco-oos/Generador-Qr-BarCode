@@ -3,10 +3,10 @@
   "name": "SCULPFUN S9 Pro 10W",
   "controller": "GRBL",
   "connection": "USB serial",
-  "bed_width_mm": 400.0,
-  "bed_height_mm": 410.0,
+  "bed_width_mm": 400,
+  "bed_height_mm": 410,
   "laser_wavelength_nm": 450,
-  "optical_power_w": 10.0,
+  "optical_power_w": 10,
   "vector_formats": [
     "SVG",
     "DXF",
@@ -22,7 +22,7 @@
     "LightBurn Core",
     "LaserGRBL (Windows)"
   ],
-  "direct_machine_output_enabled": false,
+  "direct_machine_output_enabled": true,
   "metadata": {
     "source": "SCULPFUN product/support documentation",
     "focus_type": "fixed focus + sliding mechanism",
@@ -35,7 +35,10 @@
     "homing_assumption": "Treat limit switches/homing as not guaranteed on the base S9 Pro installation; detect actual controller state before relying on homing.",
     "sculpfun_space_support": "Official Sculpfun Space supports non-galvo SCULPFUN machines and imports SVG; suitable handoff alternative on Windows/macOS.",
     "existing_shop_settings_priority": "Settings already proven by the engraving area on this exact machine/material/surface are the baseline; Marking Studio can import/capture them read-only.",
-    "focus_reference_mm": 50.0,
-    "focus_reference_source": "SCULPFUN S9 Pro manual: focus is 50 mm below the lower edge of the aluminum laser-module shell; supplied 50 mm measuring column."
+    "focus_reference_mm": 50,
+    "focus_reference_source": "SCULPFUN S9 Pro manual: focus is 50 mm below the lower edge of the aluminum laser-module shell; supplied 50 mm measuring column.",
+    "direct_control_status": "experimental_opt_in_v0.10",
+    "direct_control_scope": "GRBL 1.1 only; validated local preset; current-position origin; mandatory laser-off Frame; pause/resume/abort real-time.",
+    "direct_control_warning": "Requires physical workshop acceptance before production use. External handoff to Sculpfun Space/LightBurn/LaserGRBL remains supported."
   }
 }
