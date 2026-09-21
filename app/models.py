@@ -589,3 +589,62 @@ class ShopMaterialPresetRequest(BaseModel):
             raise ValueError("scan_validation=pass requires all recorded attempts to succeed")
         return self
 
+
+
+# WHY: Define una compilación de SVG ya generado a un plan de máquina ligado a preset validado y perfil exacto.
+class MachineJobCompileRequest(BaseModel):
+    svg: str = Field(min_length=20, max_length=8_000_000)
+    machine_profile_id: str = Field(min_length=1, max_length=160)
+    material_preset_id: int = Field(ge=1)
+    operation: Literal["line_engrave", "fill_engrave", "cut"]
+    offset_x_mm: float = Field(default=0.0, ge=0.0, le=5000.0)
+    offset_y_mm: float = Field(default=0.0, ge=0.0, le=5000.0)
+    current_position_origin: bool = True
+
+
+# WHY: Solicita un frame sin láser del trabajo compilado y exige confirmar que la zona física está despejada.
+class MachineFrameRequest(BaseModel):
+    job_id: str = Field(min_length=8, max_length=80)
+    port: str = Field(min_length=1, max_length=256)
+    baud: int = Field(default=115200, ge=1200, le=1000000)
+    confirm_workspace_clear: bool = False
+    frame_feed_mm_min: float = Field(default=1800.0, gt=0, le=30000.0)
+
+
+# WHY: Arranca exclusivamente un job compilado por Marking Studio y exige confirmaciones físicas separadas antes de energizar el láser.
+class MachineJobStartRequest(BaseModel):
+    job_id: str = Field(min_length=8, max_length=80)
+    port: str = Field(min_length=1, max_length=256)
+    baud: int = Field(default=115200, ge=1200, le=1000000)
+    confirm_workspace_clear: bool = False
+    confirm_material_matches_preset: bool = False
+    confirm_protective_measures: bool = False
+
+
+# WHY: Permite jog incremental limitado sin mezclarlo con la ejecución de trabajos productivos.
+class MachineJogRequest(BaseModel):
+    port: str = Field(min_length=1, max_length=256)
+    baud: int = Field(default=115200, ge=1200, le=1000000)
+    x_mm: float = Field(default=0.0, ge=-100.0, le=100.0)
+    y_mm: float = Field(default=0.0, ge=-100.0, le=100.0)
+    feed_mm_min: float = Field(default=1200.0, gt=0, le=10000.0)
+    confirm_workspace_clear: bool = False
+
+    # WHY: Rechaza un jog nulo para que una acción de movimiento siempre sea intencional y auditable.
+    @model_validator(mode="after")
+    def jog_has_motion(self) -> "MachineJogRequest":
+        if abs(self.x_mm) < 1e-9 and abs(self.y_mm) < 1e-9:
+            raise ValueError("jog requires x_mm or y_mm")
+        return self
+
+
+# WHY: Selecciona una plantilla geométrica segura sin incorporar velocidad/potencia; esos valores siempre provienen de un preset validado.
+class LaserProcessTemplateRequest(BaseModel):
+    template_id: Literal[
+        "line_engrave_card",
+        "fill_engrave_patch",
+        "cut_geometry_coupon",
+        "cut_papercut_panel",
+    ]
+    width_mm: float = Field(default=80.0, ge=20.0, le=400.0)
+    height_mm: float = Field(default=60.0, ge=20.0, le=410.0)
