@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 
 import pytest
@@ -253,3 +254,62 @@ def test_existing_code128_production_svg_can_compile_for_direct_engraving():
         })
         assert compiled.status_code == 200, compiled.text
         assert compiled.json()["path_count"] >= len(paths)
+
+
+# WHY: Los controles críticos real-time deben usar exactamente los bytes definidos por GRBL y no convertirse en líneas G-code.
+def test_realtime_pause_resume_abort_bytes_are_exact():
+    class RealtimeOnly:
+        def __init__(self):
+            self.payloads = []
+        def send_realtime(self, payload):
+            self.payloads.append(payload)
+
+    transport = RealtimeOnly()
+    service = GrblControlService()
+    service._transport = transport
+    service._state = "RUNNING"
+    paused = service.pause()
+    assert paused["state"] == "HOLD"
+    assert transport.payloads == [b"!"]
+
+    resumed = service.resume()
+    assert resumed["state"] == "RUNNING"
+    assert transport.payloads == [b"!", b"~"]
+
+    aborted = service.abort()
+    assert aborted["state"] == "ABORTED"
+    assert transport.payloads == [b"!", b"~", b"!", b"\x18"]
+
+
+# WHY: Frame y jog son movimientos de posicionamiento y deben permanecer incapaces de energizar el láser.
+def test_frame_and_jog_never_emit_laser_power_commands():
+    from app.machine_control import JOB_STORE, build_frame_gcode
+
+    preset_id = validated_preset("cut", power=60, interval=None, laser_mode="M3")
+    machine = load_machines()["sculpfun_s9_pro_10w"]
+    svg = generate_process_template("cut_geometry_coupon", 45, 35)["svg"]
+    result = prepare_machine_job(svg=svg, machine=machine, material_preset_id=preset_id, operation="cut")
+    job = JOB_STORE.get(result["job_id"])
+    frame_lines = build_frame_gcode(job, 1000)
+    joined = "\n".join(frame_lines)
+    assert "M3" not in joined and "M4" not in joined
+    assert not re.search(r"\bS\d", joined)
+
+    class JogTransport:
+        instances = []
+        def __init__(self, port, baud):
+            self.lines = []
+            JogTransport.instances.append(self)
+        def query_controller(self):
+            return {"laser_mode": 1, "s_value_max": 1000}
+        def send_line(self, line):
+            self.lines.append(line)
+            return "ok"
+        def close(self):
+            pass
+
+    service = GrblControlService(transport_factory=JogTransport)
+    moved = service.jog("FAKE", 115200, 10, -5, 1200)
+    assert moved["laser_enabled"] is False
+    assert JogTransport.instances[-1].lines == ["$J=G91 X10 Y-5 F1200"]
+    assert not any(token in moved["command"] for token in ("M3", "M4", " S"))
