@@ -188,6 +188,8 @@ def extract_linear_svg_paths(svg: str) -> tuple[list[list[tuple[float, float]]],
         name = _local_name(node.tag)
         if name not in _ALLOWED_TAGS:
             raise ValueError(f"Elemento SVG no permitido para control directo: {name}")
+        if name == "metadata":
+            return
         if "transform" in node.attrib:
             raise ValueError("Transformaciones SVG deben aplanarse antes del control directo")
         operation = node.attrib.get("data-operation", inherited_operation)
