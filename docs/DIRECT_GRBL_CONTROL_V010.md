@@ -16,7 +16,7 @@ La primera máquina habilitada es el perfil `sculpfun_s9_pro_10w`. Los perfiles 
 6. Antes de Start es obligatorio ejecutar Frame en el mismo puerto con `M5`.
 7. Start vuelve a leer `$I` y `$$` en la misma conexión y exige `$32=1` y `$30>0`.
 8. El estado COMPLETE sólo se emite cuando, además de terminar el streaming, GRBL responde `Idle`.
-9. Pause = feed hold `!`; Resume = cycle start `~`; Abort = hold + soft reset `0x18`.
+9. Pause = feed hold `!`; Resume = cycle start `~`; Abort = hold + soft reset `0x18`. Pause/Abort siguen disponibles en `DRAINING`, porque terminar de transmitir no significa que el movimiento físico haya terminado.
 10. Jog usa `$J=G91` y nunca enciende el láser.
 
 ## Operaciones
@@ -31,7 +31,7 @@ Convierte contornos cerrados a hatch horizontal usando exactamente `interval_mm`
 
 ### cut
 
-Recorre contornos con las pasadas, velocidad, potencia y modo M3/M4 del preset de corte validado.
+Recorre contornos con las pasadas, velocidad, potencia y modo M3/M4 del preset de corte validado. Las líneas abiertas se procesan primero y los contornos cerrados se ordenan de menor a mayor área, de modo que en las plantillas generadas los detalles/agujeros se cortan antes del borde exterior.
 
 ## Geometría admitida
 
