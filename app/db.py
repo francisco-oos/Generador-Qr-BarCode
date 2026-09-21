@@ -226,6 +226,28 @@ def material_preset_by_id(preset_id: int) -> dict | None:
         return item
 
 
+# WHY: Recupera preset + máquina de origen para impedir que el control directo reutilice ajustes en una grabadora distinta.
+def material_preset_control_context(preset_id: int) -> dict | None:
+    """Return a preset joined with the capture that proves its machine/context."""
+    with connect() as con:
+        r = con.execute(
+            """
+            SELECT p.id,p.capture_id,p.source_name,p.material,p.thickness_mm,p.description,
+                   p.operation,p.settings_json,c.machine_profile_id,c.source_type,c.summary_json
+            FROM material_presets p
+            JOIN machine_captures c ON c.id=p.capture_id
+            WHERE p.id=?
+            """,
+            (preset_id,),
+        ).fetchone()
+        if not r:
+            return None
+        item = dict(r)
+        item["settings"] = json.loads(item.pop("settings_json"))
+        item["capture_summary"] = json.loads(item.pop("summary_json"))
+        return item
+
+
 # WHY: Guarda un ajuste manual del taller con estado validado/borrador y contexto de máquina/superficie.
 def record_shop_material_preset(*, name: str, machine_profile_id: str, material: str,
                                 surface_or_model: str, operation: str, speed_mm_min: float,
