@@ -217,3 +217,13 @@ def test_direct_control_routes_are_registered():
         "/api/machine/control/jog",
     }
     assert expected <= paths, sorted(expected - paths)
+
+
+# WHY: Un path compuesto de barcode/QR debe producir trayectorias independientes y nunca unir módulos con un movimiento energizado.
+def test_compound_barcode_path_is_split_into_independent_subpaths():
+    svg = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M 1 1 h 2 v 5 h -2 z M 5 1 h 1 v 5 h -1 z"/></svg>'
+    paths, closed = extract_linear_svg_paths(svg)
+    assert len(paths) == 2
+    assert closed == [True, True]
+    assert paths[0][0] == paths[0][-1] == (1.0, 1.0)
+    assert paths[1][0] == paths[1][-1] == (5.0, 1.0)
