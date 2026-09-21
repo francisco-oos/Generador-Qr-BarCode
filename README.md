@@ -1,12 +1,32 @@
-# Server Oficina Marking Studio v0.9.0 — experimental Laser Design Studio
+# Server Oficina Marking Studio v0.10.0 — experimental direct GRBL control
 
-Generador local y auditable de **marcado físico de activos** para Server Oficina. Convierte identidades provenientes de captura manual, CSV o futura BD en texto + Code 128/QR/Data Matrix, las posiciona sobre jigs/bases, exige conciliación física y entrega archivos a Sculpfun Space/LightBurn/LaserGRBL sin controlar directamente el láser.
+Generador local y auditable de **marcado físico y diseño láser** para Server Oficina. Convierte identidades provenientes de captura manual, CSV o futura BD en texto + Code 128/QR/Data Matrix, diseña geometría de corte/grabado y mantiene el handoff a Sculpfun Space/LightBurn/LaserGRBL. En la rama v0.10 añade, de forma **experimental y opt-in**, control directo GRBL 1.1 para el perfil SCULPFUN S9 Pro mediante jobs compilados internamente, Frame obligatorio y presets locales validados.
 
 ## Problema que resuelve
 
 Un nodo sin etiqueta puede seguir siendo reconocible si se le graba `Q00525499`, pero el texto aislado obliga a capturas/verificaciones manuales. Marking Studio mantiene la inspección visual y agrega una representación escaneable. Para INOVA se parte de **Code 128 + ID operativo visible**; Sercel inicia con Code 128 + ID; teléfonos con QR + número económico estable.
 
 El sufijo INOVA `-xx` no se inventa. Se conserva como dato adicional cuando exista, pero el estándar operativo inicial usa el identificador realmente utilizado por la operación.
+
+## Novedades v0.10.0 experimental
+
+Esta rama se apila sobre Laser Design Studio v0.9 y añade control directo **GRBL 1.1** desde el mismo sistema sin eliminar el flujo por archivos.
+
+- **Control directo opt-in** sólo en perfiles de máquina que lo habiliten; `generic_grbl` permanece deshabilitado.
+- El navegador **no puede enviar G-code arbitrario**: entrega SVG saneado, el backend compila un `job_id` y Start sólo acepta ese job interno.
+- **Preset local validado obligatorio** para la misma máquina/superficie. Las referencias web y presets borrador no pueden ejecutar un trabajo.
+- Operaciones: **corte**, **grabado vectorial de línea** y **grabado de relleno/hatch** usando `interval_mm` del preset validado.
+- **Frame con láser apagado (`M5`) obligatorio** en el mismo puerto antes de Start.
+- Inicio con confirmaciones separadas de área despejada, material/preset y medidas de protección.
+- Lectura de `$I`/`$` justo antes de ejecutar; exige `$32=1` y un `$30` válido, pero **no escribe firmware automáticamente**.
+- Pausa `!`, reanudación `~`, aborto con hold + soft reset, y jog incremental `$J` con láser apagado.
+- Estado `COMPLETE` sólo después de que GRBL reporte `Idle`, no sólo cuando termina de transmitirse el job.
+- Plantillas reales de proceso en `samples/laser_process_templates/`: línea, relleno, cupón de corte y papel picado.
+- Compatibilidad directa con SVG de producción del generador original, incluido Code128/QR compuesto cuando el arte está aplanado.
+
+Documentación: `docs/DIRECT_GRBL_CONTROL_V010.md`.
+
+**Importante:** v0.10 no declara aceptación física de la SCULPFUN. CI valida el driver contra un GRBL simulado; cualquier primer uso real debe hacerse sobre material de sacrificio y bajo supervisión.
 
 ## Novedades v0.9.0 experimental
 
@@ -19,7 +39,7 @@ Esta rama conserva íntegro el flujo de identificación v0.8 y añade una superf
 - **Self-Guarding Geometry**: las restricciones físicas conocidas participan durante la generación, no sólo como advertencia posterior.
 - **OpenAI Experimental Lab** con Bridge Ladder y **Material DNA Passport**, hoja sacrificial reproducible que caracteriza puentes, agujeros mínimos y separación entre cortes.
 - Fronteras preparadas para vectorización opcional (VTracer) y nesting futuro sin convertir esos motores en dependencias obligatorias.
-- La frontera de seguridad permanece: **sin G-code, movimiento, potencia ni streaming de trabajos al láser**.
+- En v0.9 la frontera era sólo documento; v0.10 conserva ese modo y añade una ruta GRBL experimental aislada y explícitamente habilitada.
 
 Documentación de esta evolución: `docs/LASER_DESIGN_STUDIO_V090.md`.
 
@@ -182,8 +202,8 @@ La base física y el dataset son independientes. 1,200 registros con una base de
 
 ## Seguridad y límites
 
-- Marking Studio no transmite trabajos de producción, movimiento ni potencia.
-- El diagnóstico GRBL está limitado a `$I` y `$$`.
+- El flujo estable por archivo no transmite nada a la máquina. La rama v0.10 añade una ruta GRBL experimental que sólo ejecuta jobs internos compilados, con preset validado, Frame y confirmaciones físicas.
+- El diagnóstico sigue limitado a `$I`/`$`; el controlador experimental añade `$J`, G0/G1/M3/M4/M5 y comandos real-time únicamente durante acciones explícitas.
 - El foco y el material deben validarse físicamente.
 - Un rango investigado **no es un preset productivo**.
 - PVC/vinilo y materiales desconocidos se bloquean/derivan a evaluación segura.
@@ -193,6 +213,7 @@ La base física y el dataset son independientes. 1,200 registros con una base de
 
 Empiece por:
 
+- `docs/DIRECT_GRBL_CONTROL_V010.md` — driver GRBL experimental, flujo Frame/Start y límites de seguridad;
 - `docs/LASER_DESIGN_STUDIO_V090.md` — arquitectura, investigación y OpenAI Experimental Lab de v0.9;
 - `docs/MANUAL_RAPIDO.md` — operación simple;
 - `docs/PROBLEM_AND_PROPOSAL.md` — problema y propósito;

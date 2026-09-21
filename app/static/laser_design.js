@@ -25,3 +25,74 @@ $('downloadSvg').addEventListener('click',()=>lastResult&&download(lastResult.sv
 $('downloadPreview').addEventListener('click',()=>lastResult&&download(lastResult.preview_svg||lastResult.svg,`laser-design-${lastResult.kind}-PREVIEW.svg`));
 fetch('/api/laser-design/capabilities').then(r=>r.json()).then(c=>{$('capabilityState').textContent=`Núcleo ${c.geometry_units} · preflight ${c.engines.manufacturability.available?'activo':'no disponible'} · VTracer ${c.engines.vtracer.available?'disponible':'opcional'}`}).catch(()=>{$('capabilityState').textContent='Capacidades no disponibles'});
 showMode('papercut');
+
+
+// Direct GRBL control v0.10 --------------------------------------------------
+let compiledMachineJobId=null, machineFrameVerified=false, machinePollTimer=null;
+async function getJson(url){const r=await fetch(url);if(!r.ok)throw new Error(await r.text()||`HTTP ${r.status}`);return r.json()}
+function machineMsg(text,kind=''){const el=$('machineMessage');el.textContent=text;el.className='message '+kind}
+function setMachineState(state,progress=0,text=''){const badge=$('machineState');badge.textContent=state||'IDLE';badge.className='status '+(({COMPLETE:'pass',RUNNING:'warn',HOLD:'warn',ERROR:'fail',ABORTED:'fail'})[state]||'idle');$('machineProgress').value=Math.max(0,Math.min(1,Number(progress)||0));$('machineStatusText').textContent=text||state||'IDLE'}
+function selectedPort(){const port=$('machinePort').value;if(!port)throw new Error('Selecciona el puerto serial de la grabadora.');return port}
+async function refreshMachineData(){
+  try{
+    const [ports,captures]=await Promise.all([getJson('/api/machine/ports'),getJson('/api/machine/captures?limit=500')]);
+    const portSel=$('machinePort'), previousPort=portSel.value;
+    portSel.innerHTML='<option value="">Selecciona puerto</option>'+((ports.ports||[]).map(p=>`<option value="${escapeHtml(p.device)}">${escapeHtml(p.device)} · ${escapeHtml(p.description||p.name||'Serial')}</option>`).join(''));
+    if([...portSel.options].some(o=>o.value===previousPort))portSel.value=previousPort;
+    const valid=(captures.material_presets||[]).filter(p=>p.settings&&p.settings.validated_on_exact_machine_surface===true);
+    const presetSel=$('machinePreset'), previousPreset=presetSel.value;
+    presetSel.innerHTML=valid.length?'<option value="">Selecciona preset validado</option>'+valid.map(p=>`<option value="${p.id}">#${p.id} · ${escapeHtml(p.material||'material')} · ${escapeHtml(p.description||p.operation||'')}</option>`).join(''):'<option value="">No hay presets validados; créalo en Marking Studio → Materiales</option>';
+    if([...presetSel.options].some(o=>o.value===previousPreset))presetSel.value=previousPreset;
+    machineMsg(`Detectados ${(ports.ports||[]).length} puertos y ${valid.length} presets validados.`,'ok');
+  }catch(e){machineMsg('No se pudieron actualizar puertos/presets: '+e.message,'bad')}
+}
+$('refreshMachineData').addEventListener('click',refreshMachineData);
+$('loadProcessTemplate').addEventListener('click',async()=>{
+  try{
+    const templateId=$('processTemplate').value;if(!templateId)throw new Error('Selecciona una plantilla rápida.');
+    const item=await api('/api/machine/control/process-template',{template_id:templateId,width_mm:num('widthMm'),height_mm:num('heightMm')});
+    lastResult={kind:item.template_id,svg:item.svg,preview_svg:item.svg,recipe:item,preflight:{status:'PASS',component_count:null,min_web_mm:null,removed_area_ratio:null,minimum_safe_scale_percent:null,issues:[]},warnings:['Plantilla geométrica: velocidad/potencia se agregan únicamente al compilar con un preset validado.']};
+    renderResult(lastResult);$('machineOperation').value=item.operation;compiledMachineJobId=null;machineFrameVerified=false;$('frameMachineJob').disabled=true;$('startMachineJob').disabled=true;machineMsg('Plantilla cargada. Compílala con un preset local validado.','ok');
+  }catch(e){machineMsg(e.message,'bad')}
+});
+$('compileMachineJob').addEventListener('click',async()=>{
+  try{
+    if(!lastResult?.svg)throw new Error('Genera o carga primero una geometría SVG.');
+    const preset=Number($('machinePreset').value);if(!preset)throw new Error('Selecciona un preset validado.');
+    const result=await api('/api/machine/control/compile',{svg:lastResult.svg,machine_profile_id:$('machineProfile').value,material_preset_id:preset,operation:$('machineOperation').value,offset_x_mm:num('machineOffsetX'),offset_y_mm:num('machineOffsetY'),current_position_origin:true});
+    compiledMachineJobId=result.job_id;machineFrameVerified=false;$('frameMachineJob').disabled=false;$('startMachineJob').disabled=true;$('compiledJobInfo').textContent=`${result.job_id} · ${result.path_count} paths · ${result.bounds_mm.join(' × ')} mm · ${result.speed_mm_min} mm/min · ${result.power_percent}% · ${result.passes} pasada(s)`;machineMsg('Job compilado. El siguiente paso obligatorio es Frame con láser apagado.','ok');
+  }catch(e){machineMsg(e.message,'bad')}
+});
+$('frameMachineJob').addEventListener('click',async()=>{
+  try{
+    if(!compiledMachineJobId)throw new Error('Compila primero el job.');
+    const result=await api('/api/machine/control/frame',{job_id:compiledMachineJobId,port:selectedPort(),baud:num('machineBaud'),confirm_workspace_clear:$('confirmClearFrame').checked,frame_feed_mm_min:1800});
+    machineFrameVerified=!!result.framed;$('startMachineJob').disabled=!machineFrameVerified;machineMsg('Frame terminado con láser apagado. Verifica físicamente la posición antes de START.','ok');
+  }catch(e){machineFrameVerified=false;$('startMachineJob').disabled=true;machineMsg(e.message,'bad')}
+});
+async function pollMachine(){
+  try{
+    const st=await getJson('/api/machine/control/status');setMachineState(st.state,st.progress,`${st.state} · línea ${st.line_index}/${st.line_total}${st.error?' · '+st.error:''}`);
+    if(['RUNNING','HOLD','STARTING'].includes(st.state)){machinePollTimer=setTimeout(pollMachine,700)}else{machinePollTimer=null}
+  }catch(e){machineMsg('No se pudo leer estado: '+e.message,'bad')}
+}
+$('startMachineJob').addEventListener('click',async()=>{
+  try{
+    if(!machineFrameVerified)throw new Error('Frame obligatorio antes de START.');
+    const result=await api('/api/machine/control/start',{job_id:compiledMachineJobId,port:selectedPort(),baud:num('machineBaud'),confirm_workspace_clear:$('confirmClearFrame').checked,confirm_material_matches_preset:$('confirmMaterial').checked,confirm_protective_measures:$('confirmProtection').checked});
+    setMachineState(result.state,result.progress,'Arranque solicitado.');machineMsg('Trabajo enviado al controlador experimental. Mantén supervisión física continua.','ok');if(machinePollTimer)clearTimeout(machinePollTimer);pollMachine();
+  }catch(e){machineMsg(e.message,'bad')}
+});
+$('pauseMachineJob').addEventListener('click',async()=>{try{const r=await api('/api/machine/control/pause',{});setMachineState(r.state,r.progress);machineMsg('Feed hold enviado.','ok')}catch(e){machineMsg(e.message,'bad')}});
+$('resumeMachineJob').addEventListener('click',async()=>{try{const r=await api('/api/machine/control/resume',{});setMachineState(r.state,r.progress);machineMsg('Reanudación enviada.','ok');pollMachine()}catch(e){machineMsg(e.message,'bad')}});
+$('abortMachineJob').addEventListener('click',async()=>{try{const r=await api('/api/machine/control/abort',{});setMachineState(r.state,r.progress);machineMsg('ABORT enviado: hold + soft reset GRBL. Revisa la máquina antes de cualquier nuevo trabajo.','bad')}catch(e){machineMsg(e.message,'bad')}});
+document.querySelectorAll('[data-jog-x],[data-jog-y]').forEach(btn=>btn.addEventListener('click',async()=>{
+  try{
+    const x=Number(btn.dataset.jogX||0),y=Number(btn.dataset.jogY||0);
+    const result=await api('/api/machine/control/jog',{port:selectedPort(),baud:num('machineBaud'),x_mm:x,y_mm:y,feed_mm_min:num('jogFeed'),confirm_workspace_clear:$('confirmClearFrame').checked});
+    machineMsg(`Jog enviado: ${result.command}`,'ok');
+  }catch(e){machineMsg(e.message,'bad')}
+}));
+getJson('/api/machine/control/capabilities').then(c=>{if(c.direct_control)$('capabilityState').textContent+=' · GRBL directo EXPERIMENTAL'}).catch(()=>{});
+refreshMachineData();
+pollMachine();

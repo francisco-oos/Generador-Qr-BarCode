@@ -10,8 +10,8 @@
   <header class="topbar">
     <div>
       <a class="back" href="/">← Marking Studio</a>
-      <h1>Laser Design Studio <span class="badge">v0.9 experimental</span></h1>
-      <p>Diseña, convierte y valida geometría para corte. No controla la máquina.</p>
+      <h1>Laser Design Studio <span class="badge">v0.10 experimental</span></h1>
+      <p>Diseña, convierte, valida y —de forma experimental— controla GRBL 1.1 con Frame y presets locales validados.</p>
     </div>
     <div class="cap" id="capabilityState">Cargando capacidades…</div>
   </header>
@@ -26,7 +26,7 @@
     </section>
 
     <section class="workflow">
-      <span class="done">1 · Elegir</span><span>2 · Ajustar</span><span>3 · Generar</span><span>4 · Preflight</span><span>5 · Exportar</span>
+      <span class="done">1 · Elegir</span><span>2 · Ajustar</span><span>3 · Generar</span><span>4 · Preflight</span><span>5 · Compilar</span><span>6 · Frame</span><span>7 · Ejecutar</span>
     </section>
 
     <section class="workspace">
@@ -46,8 +46,79 @@
         <div class="group common-only"><h3>Seguridad geométrica</h3><div class="two"><label>Margen mm<input id="marginMm" type="number" value="8" min="0.5" step="0.5"></label><label>Objetivo puente mm<input id="minBridge" type="number" value="1.5" min="0.1" step="0.1"></label></div></div>
         <button id="generateBtn" class="primary">Generar + validar</button><div id="formMessage" class="message"></div>
       </aside>
-      <section class="panel preview-panel"><div class="panel-head"><h2>Vista previa</h2><div class="toggle"><label><input id="showGuides" type="checkbox" checked> mostrar guías</label></div></div><div class="preview" id="preview"><div class="empty">Elige una herramienta y genera el primer diseño.</div></div><div class="preview-actions"><button id="downloadSvg" disabled>Descargar SVG de corte</button><button id="downloadPreview" disabled>Descargar SVG con guías</button></div><p class="micro">El SVG de corte sólo contiene geometría de documento. LightBurn/Sculpfun Space/LaserGRBL siguen siendo responsables del control de máquina.</p></section>
+      <section class="panel preview-panel"><div class="panel-head"><h2>Vista previa</h2><div class="toggle"><label><input id="showGuides" type="checkbox" checked> mostrar guías</label></div></div><div class="preview" id="preview"><div class="empty">Elige una herramienta y genera el primer diseño.</div></div><div class="preview-actions"><button id="downloadSvg" disabled>Descargar SVG de corte</button><button id="downloadPreview" disabled>Descargar SVG con guías</button></div><p class="micro">Puedes seguir exportando a LightBurn/Sculpfun Space/LaserGRBL. El control directo GRBL v0.10 es experimental, opcional y exige preset validado + Frame sin láser.</p></section>
       <aside class="panel inspector"><div class="panel-head"><h2>Preflight físico</h2><span class="status idle" id="statusBadge">SIN ANALIZAR</span></div><div class="metrics"><div><span>Una sola pieza</span><b id="componentMetric">—</b></div><div><span>Puente mínimo</span><b id="webMetric">—</b></div><div><span>Área retirada</span><b id="areaMetric">—</b></div><div><span>Escala segura</span><b id="scaleMetric">—</b></div></div><h3>Diagnóstico</h3><ul id="issues" class="issues"><li>Genera un diseño para ver riesgos.</li></ul><div class="labbox"><h3>OpenAI Experimental Lab</h3><p><b>Cut Survival Map</b> busca puntos donde el material queda demasiado estrecho.</p><p><b>Safe Scale Guard</b> calcula cuánto tendría que ampliarse un diseño para respetar tu puente mínimo.</p><p><b>Design Genome</b> guarda los parámetros/semilla para reproducir exactamente el diseño.</p><p><b>Adaptive Bridge Planner</b> conecta automáticamente islas detectadas en stencils.</p><p><b>Material DNA</b> convierte pruebas sacrificiales en límites geométricos medibles y reproducibles.</p><p><b>Self-Guarding Geometry</b> adapta el diseño antes de exportar cuando una restricción física conocida sería violada.</p></div><details><summary>Receta reproducible</summary><pre id="recipeOut">—</pre></details></aside>
+    </section>
+
+    <section class="panel machine-panel" id="machineControlPanel">
+      <div class="panel-head machine-head">
+        <div><h2>Control directo GRBL 1.1 <span class="badge experimental">EXPERIMENTAL</span></h2><p class="micro">Sólo SCULPFUN S9 Pro/GRBL habilitado. No acepta G-code arbitrario ni modifica $30/$32.</p></div>
+        <span class="status idle" id="machineState">IDLE</span>
+      </div>
+      <div class="machine-grid">
+        <div class="machine-block">
+          <h3>1 · Geometría y proceso</h3>
+          <label>Plantilla rápida
+            <select id="processTemplate">
+              <option value="">Usar diseño actual</option>
+              <option value="line_engrave_card">Grabado línea · tarjeta</option>
+              <option value="fill_engrave_patch">Grabado relleno · parche</option>
+              <option value="cut_geometry_coupon">Corte · cupón geométrico</option>
+              <option value="cut_papercut_panel">Corte · papel picado</option>
+            </select>
+          </label>
+          <button id="loadProcessTemplate">Cargar plantilla</button>
+          <label>Operación
+            <select id="machineOperation">
+              <option value="cut">Corte</option>
+              <option value="line_engrave">Grabado de línea</option>
+              <option value="fill_engrave">Grabado relleno / hatch</option>
+            </select>
+          </label>
+          <div class="two"><label>Offset X mm<input id="machineOffsetX" type="number" value="0" min="0" step="0.1"></label><label>Offset Y mm<input id="machineOffsetY" type="number" value="0" min="0" step="0.1"></label></div>
+        </div>
+
+        <div class="machine-block">
+          <h3>2 · Máquina y preset</h3>
+          <label>Máquina
+            <select id="machineProfile"><option value="sculpfun_s9_pro_10w">SCULPFUN S9 Pro 10W · GRBL</option></select>
+          </label>
+          <label>Preset validado
+            <select id="machinePreset"><option value="">Cargando presets…</option></select>
+          </label>
+          <div class="two"><label>Puerto<select id="machinePort"><option value="">Selecciona puerto</option></select></label><label>Baud<input id="machineBaud" type="number" value="115200"></label></div>
+          <button id="refreshMachineData">Actualizar puertos/presets</button>
+          <button id="compileMachineJob" class="primary">Compilar job seguro</button>
+          <div id="compiledJobInfo" class="micro">Sin job compilado.</div>
+        </div>
+
+        <div class="machine-block safety-block">
+          <h3>3 · Frame y seguridad física</h3>
+          <label class="check"><input id="confirmClearFrame" type="checkbox"> Área despejada para movimiento</label>
+          <button id="frameMachineJob" disabled>Frame · láser apagado</button>
+          <div class="safety-confirmations">
+            <label class="check"><input id="confirmMaterial" type="checkbox"> Material/superficie coincide con el preset validado</label>
+            <label class="check"><input id="confirmProtection" type="checkbox"> Protección, extracción y supervisión listas</label>
+          </div>
+          <button id="startMachineJob" class="danger-action" disabled>START · ejecutar láser</button>
+          <div class="machine-actions">
+            <button id="pauseMachineJob">Pausa</button><button id="resumeMachineJob">Reanudar</button><button id="abortMachineJob" class="danger-outline">ABORTAR</button>
+          </div>
+        </div>
+
+        <div class="machine-block">
+          <h3>4 · Jog sin láser</h3>
+          <p class="micro">Incremental GRBL $J. Máximo ±100 mm por orden. No disponible durante un job.</p>
+          <div class="jog-grid">
+            <button data-jog-y="10">Y +10</button>
+            <button data-jog-x="-10">X −10</button><button data-jog-x="10">X +10</button>
+            <button data-jog-y="-10">Y −10</button>
+          </div>
+          <label>Feed jog mm/min<input id="jogFeed" type="number" value="1200" min="1" max="10000"></label>
+        </div>
+      </div>
+      <div class="machine-statusline"><b>Estado:</b> <span id="machineStatusText">Sin conexión activa.</span><progress id="machineProgress" value="0" max="1"></progress></div>
+      <div id="machineMessage" class="message"></div>
     </section>
   </main>
   <script src="/static/laser_design.js"></script>

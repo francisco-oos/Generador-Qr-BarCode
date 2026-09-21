@@ -1,12 +1,12 @@
 """FastAPI application for Server Oficina Marking Studio.
 
 Marking Studio owns asset-identification rules, template layout, batching, physical
-reconciliation and audit history.  It intentionally does not stream engraving jobs
-to the laser. LightBurn/LaserGRBL remain the machine-control layer.
+reconciliation and audit history. v0.10 adds an isolated experimental GRBL 1.1
+controller for validated local presets while preserving LightBurn/Sculpfun Space/
+LaserGRBL as supported external handoff paths.
 
-The only direct controller communication implemented here is an opt-in, read-only
-GRBL diagnostic that sends ``$I`` and ``$$`` so the shop can capture the settings
-already used by its SCULPFUN or another GRBL engraver.
+Direct control is opt-in per machine profile, requires a laser-off Frame before
+Start, does not accept arbitrary client G-code, and never rewrites GRBL settings.
 """
 from __future__ import annotations
 
@@ -77,12 +77,24 @@ from .models import (
     CodeQualityCheckRequest,
     MarkingComparisonRequest,
     MarkingCouponRequest,
+    MachineJobCompileRequest,
+    MachineFrameRequest,
+    MachineJobStartRequest,
+    MachineJogRequest,
+    LaserProcessTemplateRequest,
 )
 from .template_engine import apply_input_rules, render_template
 from .calibration import calibration_target_svg, evaluate_reference_points, jig_reference_points
 from .material_catalog import phone_reference, search_material_reference
 from .code_quality import assess_template_codes
 from .marking_coupon import render_marking_coupon
+from .machine_control import (
+    CONTROL_SERVICE,
+    JOB_STORE,
+    control_capabilities,
+    generate_process_template,
+    prepare_machine_job,
+)
 from .laser_design_studio import (
     PapercutRequest, HalftoneRequest, StencilRequest, BridgeCouponRequest, MaterialPassportRequest,
     capabilities as laser_design_capabilities,
@@ -91,7 +103,7 @@ from .laser_design_studio import (
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC = ROOT / "app" / "static"
-VERSION = "0.9.0"
+VERSION = "0.10.0"
 
 
 # WHY: Inicializa almacenamiento y recursos una sola vez al arrancar/cerrar la aplicación.
@@ -104,7 +116,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="Server Oficina Marking Studio",
     version=VERSION,
-    description="Generador de identificación física para nodos, teléfonos y activos.",
+    description="Identificación, diseño láser y control GRBL experimental para nodos, teléfonos y activos.",
     lifespan=lifespan,
 )
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
@@ -147,6 +159,7 @@ def health() -> dict[str, Any]:
         "grbl_read_only_probe": True,
         "laser_design_studio": True,
         "openai_experimental_lab": True,
+        "direct_grbl_control_experimental": True,
     }
 
 
@@ -715,6 +728,123 @@ def materials_phone(brand: str, model: str = "") -> dict[str, Any]:
         "matches": phone_reference(brand, model),
         "rule": "El modelo exacto y la superficie exacta mandan; un preset validado del taller tiene prioridad sobre una referencia web.",
     }
+
+
+# ---------------------------------------------------------------------------
+# Experimental direct GRBL control
+# ---------------------------------------------------------------------------
+
+# WHY: Publica límites del controlador experimental para que la UI no asuma soporte universal de hardware.
+@app.get("/api/machine/control/capabilities")
+def machine_control_capabilities() -> dict[str, Any]:
+    _require_license()
+    return control_capabilities()
+
+
+# WHY: Devuelve el estado de la única sesión de control local sin abrir ni mover la máquina.
+@app.get("/api/machine/control/status")
+def machine_control_status() -> dict[str, Any]:
+    _require_license()
+    return CONTROL_SERVICE.status()
+
+
+# WHY: Genera geometría de prueba sin parámetros de máquina; potencia/velocidad se agregan sólo al compilar con preset validado.
+@app.post("/api/machine/control/process-template")
+def machine_control_process_template(req: LaserProcessTemplateRequest) -> dict[str, Any]:
+    _require_license()
+    try:
+        return generate_process_template(req.template_id, req.width_mm, req.height_mm)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+# WHY: Convierte SVG saneado a un job opaco ligado a preset/máquina, impidiendo que Start reciba G-code arbitrario.
+@app.post("/api/machine/control/compile")
+def machine_control_compile(req: MachineJobCompileRequest) -> dict[str, Any]:
+    _require_license()
+    machine = load_machines().get(req.machine_profile_id)
+    if not machine:
+        raise HTTPException(404, "Perfil de máquina no encontrado")
+    try:
+        return prepare_machine_job(
+            svg=req.svg,
+            machine=machine,
+            material_preset_id=req.material_preset_id,
+            operation=req.operation,
+            offset_x_mm=req.offset_x_mm,
+            offset_y_mm=req.offset_y_mm,
+            current_position_origin=req.current_position_origin,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+# WHY: Ejecuta un recorrido de límites con M5 y exige confirmación de zona despejada antes de cualquier movimiento.
+@app.post("/api/machine/control/frame")
+def machine_control_frame(req: MachineFrameRequest) -> dict[str, Any]:
+    _require_license()
+    if not req.confirm_workspace_clear:
+        raise HTTPException(400, "Debe confirmar que el área de trabajo está despejada")
+    try:
+        job = JOB_STORE.get(req.job_id)
+        return CONTROL_SERVICE.frame(job, req.port, req.baud, req.frame_feed_mm_min)
+    except (ValueError, RuntimeError, TimeoutError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+# WHY: Energiza el láser sólo sobre un job interno previamente framed y con tres confirmaciones físicas explícitas.
+@app.post("/api/machine/control/start")
+def machine_control_start(req: MachineJobStartRequest) -> dict[str, Any]:
+    _require_license()
+    if not (req.confirm_workspace_clear and req.confirm_material_matches_preset and req.confirm_protective_measures):
+        raise HTTPException(400, "Start requiere confirmar zona despejada, material/preset y medidas de protección")
+    try:
+        job = JOB_STORE.get(req.job_id)
+        return CONTROL_SERVICE.start(job, req.port, req.baud)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+# WHY: Expone feed-hold real-time sin modificar geometría, preset o firmware.
+@app.post("/api/machine/control/pause")
+def machine_control_pause() -> dict[str, Any]:
+    _require_license()
+    try:
+        return CONTROL_SERVICE.pause()
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+# WHY: Reanuda únicamente una sesión que el mismo servicio dejó en HOLD.
+@app.post("/api/machine/control/resume")
+def machine_control_resume() -> dict[str, Any]:
+    _require_license()
+    try:
+        return CONTROL_SERVICE.resume()
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+# WHY: Ejecuta hold + soft-reset real-time como abort de emergencia del job activo.
+@app.post("/api/machine/control/abort")
+def machine_control_abort() -> dict[str, Any]:
+    _require_license()
+    try:
+        return CONTROL_SERVICE.abort()
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+# WHY: Permite movimiento incremental limitado con láser apagado y confirmación de zona despejada.
+@app.post("/api/machine/control/jog")
+def machine_control_jog(req: MachineJogRequest) -> dict[str, Any]:
+    _require_license()
+    if not req.confirm_workspace_clear:
+        raise HTTPException(400, "Debe confirmar que el área de trabajo está despejada")
+    try:
+        return CONTROL_SERVICE.jog(req.port, req.baud, req.x_mm, req.y_mm, req.feed_mm_min)
+    except (ValueError, RuntimeError, TimeoutError) as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------

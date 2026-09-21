@@ -10,7 +10,7 @@
   <header class="topbar">
     <div>
       <div class="eyebrow">SERVER OFICINA</div>
-      <h1>Marking Studio <span class="version">v0.9.0 experimental</span></h1>
+      <h1>Marking Studio <span class="version">v0.10.0 experimental</span></h1>
       <p>Identificación física estandarizada · QR · Code 128 · Data Matrix · lotes CSV</p>
     </div>
     <div class="top-actions"><div class="mode-switch" aria-label="Modo de experiencia"><button id="guidedModeBtn" class="mode active">Modo guiado</button><button id="expertModeBtn" class="mode">Modo experto</button></div><div id="licenseBadge" class="badge">Cargando licencia…</div></div>
@@ -42,15 +42,15 @@
         <div id="homeStatus" class="home-status" aria-live="polite">Cargando catálogo…</div>
       </div>
       <div class="home-actions section-gap">
-        <a class="home-card" href="/laser-design"><strong>Laser Design Studio</strong><span>Papel picado, foto→halftone, foto→stencil y preflight físico experimental.</span><em>Abrir Laser Design Studio →</em></a>
+        <a class="home-card" href="/laser-design"><strong>Laser Design Studio</strong><span>Papel picado, foto→halftone, foto→stencil, preflight y control GRBL experimental.</span><em>Abrir Laser Design Studio →</em></a>
         <button class="home-card" data-open-tab="individual"><strong>Marcar un equipo</strong><span>Elegir plantilla, capturar ID y obtener SVG/PNG.</span><em>Generador individual →</em></button>
         <button class="home-card" data-open-tab="batch"><strong>Procesar una lista o CSV</strong><span>Mapear columnas, asignar posiciones y exportar uno o muchos SVG.</span><em>Lotes / CSV →</em></button>
         <button class="home-card" data-open-tab="config"><strong>Crear o ajustar una plantilla</strong><span>Arrastrar QR, barcode, texto y formas sobre un lienzo en milímetros.</span><em>Estudio visual →</em></button>
         <button class="home-card" data-open-tab="verify"><strong>Verificar un grabado</strong><span>Comparar el código leído por el escáner contra la identidad esperada.</span><em>Verificar →</em></button>
       </div>
       <div class="grid two section-gap">
-        <article class="panel"><h2>Flujo seguro</h2><div class="workflow-line"><span>1</span>Diseñar / seleccionar plantilla</div><div class="workflow-line"><span>2</span>Cargar o capturar datos</div><div class="workflow-line"><span>3</span>Revisar vista previa</div><div class="workflow-line"><span>4</span>Exportar SVG al software de la máquina</div><div class="workflow-line"><span>5</span>Frame + preset validado + grabado</div><div class="workflow-line"><span>6</span>Escanear y confirmar</div></article>
-        <article class="panel"><h2>Principio de seguridad</h2><p>Marking Studio <strong>no sustituye LightBurn, Sculpfun Space ni LaserGRBL</strong>. Genera diseño, lotes, manifiestos y trazabilidad; el software de la máquina conserva movimiento, potencia y disparo.</p><div class="msg ok">Esto permite evolucionar plantillas y datos sin duplicar un controlador láser que ya funciona.</div></article>
+        <article class="panel"><h2>Flujo seguro</h2><div class="workflow-line"><span>1</span>Diseñar / seleccionar plantilla</div><div class="workflow-line"><span>2</span>Cargar o capturar datos</div><div class="workflow-line"><span>3</span>Revisar vista previa</div><div class="workflow-line"><span>4</span>Exportar SVG o abrir Laser Design Studio</div><div class="workflow-line"><span>5</span>Ruta estable: LightBurn/Sculpfun Space/LaserGRBL</div><div class="workflow-line"><span>6</span>Ruta experimental: compilar → Frame M5 → Start</div><div class="workflow-line"><span>7</span>Escanear y confirmar</div></article>
+        <article class="panel"><h2>Principio de seguridad</h2><p>LightBurn, Sculpfun Space y LaserGRBL siguen siendo la ruta estable recomendada. <strong>v0.10 añade control directo GRBL 1.1 experimental</strong> sólo para perfiles habilitados, con job interno, preset local validado, Frame con láser apagado y confirmaciones físicas.</p><div class="msg ok">Esto permite evolucionar plantillas y datos sin duplicar un controlador láser que ya funciona.</div></article>
       </div>
     </section>
 
